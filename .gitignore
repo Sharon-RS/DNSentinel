@@ -1,0 +1,17 @@
+venv/
+
+__pycache__/
+
+*.pyc
+
+logs/
+
+data/profiles/
+
+data/history/
+
+data/datasets/
+
+data/models/
+
+.vscode/

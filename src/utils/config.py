@@ -50,3 +50,21 @@ class Config:
     TEST_SIZE = 0.20
 
     MODEL_NAME = "dnsentinel_rf.pkl"
+
+
+    # Behavior Deviation Weights
+
+    ENTROPY_WEIGHT = 0.25
+    DOMAIN_LENGTH_WEIGHT = 0.20
+    QUERY_RATE_WEIGHT = 0.15
+    NOVEL_DOMAIN_WEIGHT = 0.20
+    ORGANIZATION_RARITY_WEIGHT = 0.20
+
+    # ----------------------------------------------------
+    # Risk Thresholds
+    # ----------------------------------------------------
+
+    NORMAL_THRESHOLD = 25
+    LOW_RISK_THRESHOLD = 50
+    SUSPICIOUS_THRESHOLD = 75
+    HIGH_RISK_THRESHOLD = 100

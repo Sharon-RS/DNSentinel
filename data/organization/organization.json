@@ -1,0 +1,37 @@
+{
+    "total_hosts": [
+        "10.0.0.1"
+    ],
+    "total_queries": 5,
+    "entropy_sum": 17.3,
+    "domain_length_sum": 76,
+    "average_entropy": 3.46,
+    "average_domain_length": 15.2,
+    "domain_frequency": {
+        "google.com": 1,
+        "github.com": 1,
+        "youtube.com": 1,
+        "stackoverflow.com": 1,
+        "asd82js92j.command.xyz": 1
+    },
+    "query_type_frequency": {
+        "1": 5
+    },
+    "host_domain_map": {
+        "google.com": [
+            "10.0.0.1"
+        ],
+        "github.com": [
+            "10.0.0.1"
+        ],
+        "youtube.com": [
+            "10.0.0.1"
+        ],
+        "stackoverflow.com": [
+            "10.0.0.1"
+        ],
+        "asd82js92j.command.xyz": [
+            "10.0.0.1"
+        ]
+    }
+}

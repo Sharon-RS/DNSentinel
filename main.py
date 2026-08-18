@@ -1,131 +1,111 @@
 from src.capture.dns_capture import DNSCapture
 from src.features.traditional_features import TraditionalFeatureExtractor
-from src.behavior.host_profile import HostProfileManager
+from src.pipeline.detection_pipeline import DetectionPipeline
 
 
-feature_extractor = TraditionalFeatureExtractor()
+class DNSentinel:
 
-host_profile_manager = HostProfileManager()
+    def __init__(self):
 
+        self.extractor = TraditionalFeatureExtractor()
 
-def handle_dns_event(event):
+        self.pipeline = DetectionPipeline()
 
-    features = feature_extractor.extract(event)
+    def process_dns_event(self, dns_event):
 
-    host = event["source_ip"]
-
-    domain = event["domain"]
-
-    profile = host_profile_manager.update_profile(
-        host=host,
-        domain=domain,
-        features=features
-    )
-
-    print("=" * 60)
-    print("DNS EVENT DETECTED")
-    print("=" * 60)
-
-    print(f"Host   : {host}")
-    print(f"Domain : {domain}")
-
-    print()
-
-    print("-" * 60)
-    print("TRADITIONAL DNS FEATURES")
-    print("-" * 60)
-
-    print(
-        f"Domain Length   : "
-        f"{features['domain_length']}"
-    )
-
-    print(
-        f"Entropy         : "
-        f"{features['entropy']}"
-    )
-
-    print(
-        f"Digit Ratio     : "
-        f"{features['digit_ratio']}"
-    )
-
-    print(
-        f"Packet Size     : "
-        f"{features['packet_size']}"
-    )
-
-    print()
-
-    print("-" * 60)
-    print("ADAPTIVE HOST PROFILE")
-    print("-" * 60)
-
-    print(
-        f"Total Queries         : "
-        f"{profile['total_queries']}"
-    )
-
-    print(
-        f"Average Entropy       : "
-        f"{profile['average_entropy']}"
-    )
-
-    print(
-        f"Average Domain Length : "
-        f"{profile['average_domain_length']}"
-    )
-
-    print(
-        f"Unique Domains        : "
-        f"{len(profile['unique_domains'])}"
-    )
-
-    print()
-
-    print("DOMAIN FREQUENCY")
-
-    for domain_name, count in sorted(
-        profile["domain_frequency"].items(),
-        key=lambda item: item[1],
-        reverse=True
-    )[:5]:
-
-        print(
-            f"{domain_name:<35} {count}"
+        features = self.extractor.extract(
+            dns_event
         )
 
-    print()
+        result = self.pipeline.process(
 
+            host=dns_event["source_ip"],
 
-def main():
+            domain=dns_event["domain"],
 
-    print()
+            features=features
 
-    print("=" * 60)
-    print("DNSENTINEL v0.1")
-    print("Adaptive DNS Behavioral Intelligence")
-    print("=" * 60)
+        )
 
-    print()
+        self.display_result(
 
-    print(
-        "[+] Traditional feature extraction enabled"
-    )
+            dns_event,
 
-    print(
-        "[+] Adaptive host profiling enabled"
-    )
+            features,
 
-    print()
+            result
 
-    capture = DNSCapture(
-        packet_handler=handle_dns_event
-    )
+        )
 
-    capture.start()
+    def display_result(
+
+        self,
+
+        event,
+
+        features,
+
+        result
+
+    ):
+
+        print("=" * 60)
+
+        print(f"Time        : {event['timestamp']}")
+
+        print(f"Host        : {event['source_ip']}")
+
+        print(f"Domain      : {event['domain']}")
+
+        print()
+
+        print("Packet Features")
+
+        print("-----------------------------")
+
+        print(f"Entropy     : {features['entropy']}")
+
+        print(f"Length      : {features['domain_length']}")
+
+        print(f"Digits      : {features['digit_ratio']}")
+
+        print(f"Packet Size : {features['packet_size']}")
+
+        print()
+
+        print("Detection")
+
+        print("-----------------------------")
+
+        print(f"Score       : {result['behavior_score']}")
+
+        print(f"Risk        : {result['risk_level']}")
+
+        print(f"Confidence  : {result['confidence']}")
+
+        print()
+
+        print(f"Recommendation:")
+
+        print(result["recommendation"])
+
+        print("=" * 60)
+
+        print()
+
+    def start(self):
+
+        capture = DNSCapture(
+
+            self.process_dns_event
+
+        )
+
+        capture.start()
 
 
 if __name__ == "__main__":
 
-    main()
+    detector = DNSentinel()
+
+    detector.start()

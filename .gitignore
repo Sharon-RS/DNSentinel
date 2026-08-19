@@ -1,17 +1,14 @@
 venv/
-
 __pycache__/
-
 *.pyc
+.pytest_cache/
+
+data/profiles/
+data/organization/
+data/history/
+data/datasets/
+data/models/
 
 logs/
 
-data/profiles/
-
-data/history/
-
-data/datasets/
-
-data/models/
-
-.vscode/
+.env

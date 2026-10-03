@@ -82,6 +82,7 @@ class DNSentinel:
         print(f"Risk        : {result['risk_level']}")
 
         print(f"Confidence  : {result['confidence']}")
+        print(f"Baseline Updated : "f"{result['baseline_updated']}")
 
         print()
 
@@ -101,7 +102,7 @@ class DNSentinel:
 
         )
 
-        capture.start()
+        capture.start(interface="ens33")
 
 
 if __name__ == "__main__":

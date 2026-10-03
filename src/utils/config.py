@@ -1,5 +1,5 @@
 from pathlib import Path
-
+import os
 
 class Config:
 
@@ -9,7 +9,12 @@ class Config:
 
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-    DATA_DIR = PROJECT_ROOT / "data"
+    DATA_DIR = Path(
+        os.environ.get(
+            "DNSENTINEL_DATA_DIR",
+            str(PROJECT_ROOT / "data")
+        )
+    )
 
     PROFILE_DIR = DATA_DIR / "profiles"
 

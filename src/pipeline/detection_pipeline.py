@@ -7,23 +7,47 @@ from src.risk.risk_engine import RiskEngine
 
 
 class DetectionPipeline:
+    """
+    Main DNSentinel behavioral detection pipeline.
+
+    Processing order:
+
+        1. Load the existing trusted host baseline.
+        2. Load the existing trusted organization baseline.
+        3. Update the sliding window with the current observation.
+        4. Build a behavioral snapshot.
+        5. Calculate behavioral deviation.
+        6. Convert deviation into a risk decision.
+        7. Learn the observation only when it is trusted.
+
+    This prevents suspicious observations from immediately
+    poisoning the behavioral baseline.
+    """
 
     def __init__(self):
 
-        self.host_profile = HostProfileManager()
+        self.host_profile = (
+            HostProfileManager()
+        )
 
-        self.organization_profile = OrganizationProfile()
+        self.organization_profile = (
+            OrganizationProfile()
+        )
 
-        self.window = SlidingWindowManager()
+        self.window = (
+            SlidingWindowManager()
+        )
 
         self.deviation_engine = (
             BehaviorDeviationEngine()
         )
 
-        self.risk_engine = RiskEngine()
+        self.risk_engine = (
+            RiskEngine()
+        )
 
     # --------------------------------------------------
-    # Process One DNS Observation
+    # Process DNS observation
     # --------------------------------------------------
 
     def process(
@@ -34,33 +58,41 @@ class DetectionPipeline:
     ):
 
         # ==================================================
-        # 1. READ PREVIOUS HOST PROFILE
+        # STEP 1
+        # Load CURRENT trusted baselines
         # ==================================================
 
-        previous_host_profile = (
-            self.host_profile
-            .load(host)
+        host_profile = (
+            self.host_profile.load(host)
             .to_dict()
         )
 
-        # ==================================================
-        # 2. READ PREVIOUS ORGANIZATION PROFILE
-        # ==================================================
-
-        previous_organization_profile = (
+        organization_profile = (
             self.organization_profile.load()
         )
 
         # ==================================================
-        # 3. READ PREVIOUS SLIDING WINDOW
+        # STEP 2
+        # Update sliding window
+        #
+        # The sliding window represents recent activity.
+        # It is intentionally separate from the persistent
+        # trusted baseline.
         # ==================================================
 
-        previous_window = (
+        self.window.update(
+            host,
+            domain,
+            features
+        )
+
+        window_statistics = (
             self.window.get_statistics(host)
         )
 
         # ==================================================
-        # 4. BUILD SNAPSHOT USING PREVIOUS STATE
+        # STEP 3
+        # Build behavioral snapshot
         # ==================================================
 
         snapshot = BehaviorSnapshot(
@@ -71,67 +103,79 @@ class DetectionPipeline:
 
             packet_features=features,
 
-            host_profile=previous_host_profile,
+            host_profile=host_profile,
 
-            organization_profile=(
-                previous_organization_profile
-            ),
+            organization_profile=organization_profile,
 
-            window_statistics=(
-                previous_window
+            window_statistics=window_statistics
+
+        )
+
+        # ==================================================
+        # STEP 4
+        # Calculate behavioral deviation
+        # ==================================================
+
+        behavior_result = (
+            self.deviation_engine.calculate(
+                snapshot
             )
         )
 
         # ==================================================
-        # 5. CALCULATE BEHAVIOR
-        # ==================================================
-
-        behavior_result = (
-            self.deviation_engine
-            .calculate(snapshot)
-        )
-
-        # ==================================================
-        # 6. CALCULATE RISK
+        # STEP 5
+        # Calculate risk
         # ==================================================
 
         risk_result = (
-            self.risk_engine
-            .evaluate(behavior_result)
+            self.risk_engine.evaluate(
+                behavior_result
+            )
         )
 
         # ==================================================
-        # 7. NOW UPDATE HOST PROFILE
+        # STEP 6
+        # Decide whether to learn
         # ==================================================
 
-        self.host_profile.update(
-            host,
-            domain,
-            features
-        )
+        risk_level = risk_result[
+            "risk_level"
+        ]
 
-        # ==================================================
-        # 8. NOW UPDATE ORGANIZATION PROFILE
-        # ==================================================
+        # Only trusted observations are allowed
+        # to update the persistent baseline.
+        #
+        # NORMAL and LOW_RISK observations are
+        # currently considered safe enough to learn.
+        #
+        # SUSPICIOUS and HIGH_RISK observations
+        # are NOT learned immediately.
 
-        self.organization_profile.update(
-            host,
-            domain,
-            features
-        )
+        if risk_level in (
+            "NORMAL",
+            "LOW_RISK"
+        ):
 
-        # ==================================================
-        # 9. NOW UPDATE SLIDING WINDOW
-        # ==================================================
+            self.host_profile.update(
+                host,
+                domain,
+                features
+            )
 
-        self.window.update(
-            host,
-            domain,
-            features
-        )
+            self.organization_profile.update(
+                host,
+                domain,
+                features
+            )
 
-        # ==================================================
-        # 10. RETURN RESULT
-        # ==================================================
+            risk_result[
+                "baseline_updated"
+            ] = True
+
+        else:
+
+            risk_result[
+                "baseline_updated"
+            ] = False
 
         return risk_result

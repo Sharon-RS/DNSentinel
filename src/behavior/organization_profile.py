@@ -1,18 +1,30 @@
 import json
-from pathlib import Path
 from collections import Counter
 
 from src.utils.config import Config
 
 
 class OrganizationProfile:
+    """
+    Maintains the behavioral baseline for the organization.
+
+    The organization profile records:
+        - Known hosts
+        - DNS query statistics
+        - Domain frequency
+        - Query type frequency
+        - Which hosts have queried which domains
+
+    The detection pipeline decides whether an observation
+    should be learned. This class only manages the data.
+    """
 
     def __init__(self):
 
         self.profile_path = (
-            Config.DATA_DIR /
-            "organization" /
-            "organization.json"
+            Config.DATA_DIR
+            / "organization"
+            / "organization.json"
         )
 
         self.profile_path.parent.mkdir(
@@ -20,9 +32,9 @@ class OrganizationProfile:
             exist_ok=True
         )
 
-    # ------------------------------------
-    # Create Empty Profile
-    # ------------------------------------
+    # --------------------------------------------------
+    # Empty profile
+    # --------------------------------------------------
 
     def create_profile(self):
 
@@ -48,19 +60,15 @@ class OrganizationProfile:
 
         }
 
-    # ------------------------------------
+    # --------------------------------------------------
     # Load
-    # ------------------------------------
+    # --------------------------------------------------
 
     def load(self):
 
         if not self.profile_path.exists():
 
-            profile = self.create_profile()
-
-            self.save(profile)
-
-            return profile
+            return self.create_profile()
 
         with open(
             self.profile_path,
@@ -69,9 +77,9 @@ class OrganizationProfile:
 
             return json.load(file)
 
-    # ------------------------------------
+    # --------------------------------------------------
     # Save
-    # ------------------------------------
+    # --------------------------------------------------
 
     def save(self, profile):
 
@@ -86,9 +94,9 @@ class OrganizationProfile:
                 indent=4
             )
 
-    # ------------------------------------
-    # Update
-    # ------------------------------------
+    # --------------------------------------------------
+    # Update trusted observation
+    # --------------------------------------------------
 
     def update(
         self,
@@ -99,40 +107,60 @@ class OrganizationProfile:
 
         profile = self.load()
 
+        # ----------------------------------------------
+        # Host
+        # ----------------------------------------------
+
         if host not in profile["total_hosts"]:
 
-            profile["total_hosts"].append(host)
+            profile["total_hosts"].append(
+                host
+            )
+
+        # ----------------------------------------------
+        # Query count
+        # ----------------------------------------------
 
         profile["total_queries"] += 1
 
-        profile["entropy_sum"] += features["entropy"]
+        # ----------------------------------------------
+        # Entropy
+        # ----------------------------------------------
+
+        profile["entropy_sum"] += (
+            features["entropy"]
+        )
+
+        # ----------------------------------------------
+        # Domain length
+        # ----------------------------------------------
 
         profile["domain_length_sum"] += (
             features["domain_length"]
         )
 
+        # ----------------------------------------------
+        # Averages
+        # ----------------------------------------------
+
         profile["average_entropy"] = round(
-
-            profile["entropy_sum"] /
-            profile["total_queries"],
-
+            profile["entropy_sum"]
+            / profile["total_queries"],
             4
         )
 
         profile["average_domain_length"] = round(
-
-            profile["domain_length_sum"] /
-            profile["total_queries"],
-
+            profile["domain_length_sum"]
+            / profile["total_queries"],
             4
         )
 
-        # Domain Frequency
+        # ----------------------------------------------
+        # Domain frequency
+        # ----------------------------------------------
 
         domain_frequency = Counter(
-
             profile["domain_frequency"]
-
         )
 
         domain_frequency[domain] += 1
@@ -141,12 +169,12 @@ class OrganizationProfile:
             domain_frequency
         )
 
-        # Query Type Frequency
+        # ----------------------------------------------
+        # Query type frequency
+        # ----------------------------------------------
 
         query_frequency = Counter(
-
             profile["query_type_frequency"]
-
         )
 
         query_type = str(
@@ -159,9 +187,13 @@ class OrganizationProfile:
             query_frequency
         )
 
-        # Host Domain Map
+        # ----------------------------------------------
+        # Host → domain relationship
+        # ----------------------------------------------
 
-        host_map = profile["host_domain_map"]
+        host_map = profile[
+            "host_domain_map"
+        ]
 
         if domain not in host_map:
 
@@ -169,9 +201,13 @@ class OrganizationProfile:
 
         if host not in host_map[domain]:
 
-            host_map[domain].append(host)
+            host_map[domain].append(
+                host
+            )
 
-        profile["host_domain_map"] = host_map
+        profile[
+            "host_domain_map"
+        ] = host_map
 
         self.save(profile)
 

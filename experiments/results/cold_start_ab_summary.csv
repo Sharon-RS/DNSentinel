@@ -1,0 +1,5 @@
+workload,pipeline,total_queries,tp,fp,tn,fn,accuracy,binary_precision,binary_recall,binary_f1,false_positive_rate,false_negative_rate,calib_recall,calib_fpr,malicious_score_below_30,malicious_admitted_calibration,baseline_contamination_count,first_detection_query_index,final_persisted_queries,final_host_entropy,final_host_length,entropy_drift,length_drift,mean_latency_ms,median_latency_ms,p99_latency_ms
+Historical Tunnel Burst Trace,Pipeline A (Control / Pre-Mitigation),115,36,0,0,79,0.313,1.0,0.313,0.4768,0.0,0.687,0.1,0.0,40,9,79,10,39,4.5265,55.6154,4.5265,55.6154,0.2596,0.2798,0.838
+Historical Tunnel Burst Trace,Pipeline B (Mitigated Treatment),115,65,0,0,50,0.5652,1.0,0.5652,0.7222,0.0,0.4348,0.8,0.0,0,0,0,2,0,0.0,0.0,0.0,0.0,0.056,0.0425,0.3026
+Legitimate New-Host Workload,Pipeline A (Control / Pre-Mitigation),100,0,11,89,0,0.89,0.0,0.0,0.0,0.11,0.0,0.0,0.1,0,0,0,8,89,3.0611,11.236,3.0611,11.236,0.2846,0.251,1.5754
+Legitimate New-Host Workload,Pipeline B (Mitigated Treatment),100,0,6,94,0,0.94,0.0,0.0,0.0,0.06,0.0,0.0,0.0,0,0,0,11,94,3.0224,10.9255,3.0224,10.9255,0.3564,0.2635,2.1272

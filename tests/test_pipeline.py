@@ -1,55 +1,58 @@
 from src.pipeline.detection_pipeline import DetectionPipeline
+from experiments.context import IsolatedEvaluationContext
 
-pipeline = DetectionPipeline()
+with IsolatedEvaluationContext() as ctx:
 
-samples = [
+    pipeline = ctx.create_pipeline()
 
-    ("10.0.0.1", "google.com", 2.6, 10),
+    samples = [
 
-    ("10.0.0.1", "github.com", 3.0, 10),
+        ("10.0.0.1", "google.com", 2.6, 10),
 
-    ("10.0.0.1", "youtube.com", 3.2, 11),
+        ("10.0.0.1", "github.com", 3.0, 10),
 
-    ("10.0.0.1", "stackoverflow.com", 3.4, 17),
+        ("10.0.0.1", "youtube.com", 3.2, 11),
 
-    ("10.0.0.1", "asd82js92j.command.xyz", 5.1, 28)
+        ("10.0.0.1", "stackoverflow.com", 3.4, 17),
 
-]
+        ("10.0.0.1", "asd82js92j.command.xyz", 5.1, 28)
 
-for host, domain, entropy, length in samples:
+    ]
 
-    features = {
+    for host, domain, entropy, length in samples:
 
-        "entropy": entropy,
+        features = {
 
-        "domain_length": length,
+            "entropy": entropy,
 
-        "query_type": 1
+            "domain_length": length,
 
-    }
+            "query_type": 1
 
-    result = pipeline.process(
+        }
 
-        host,
+        result = pipeline.process(
 
-        domain,
+            host,
 
-        features
+            domain,
 
-    )
+            features
 
-    print("\n--------------------------------")
+        )
 
-    print(f"Domain       : {domain}")
+        print("\n--------------------------------")
 
-    print(f"Score        : {result['behavior_score']}")
+        print(f"Domain       : {domain}")
 
-    print(f"Risk Level   : {result['risk_level']}")
+        print(f"Score        : {result['behavior_score']}")
 
-    print(f"Confidence   : {result['confidence']}")
+        print(f"Risk Level   : {result['risk_level']}")
 
-    print(f"Recommendation: {result['recommendation']}")
+        print(f"Confidence   : {result['confidence']}")
 
-    # print(domain)
+        print(f"Recommendation: {result['recommendation']}")
 
-    # print(result)____
+        # print(domain)
+
+        # print(result)____

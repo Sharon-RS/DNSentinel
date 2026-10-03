@@ -46,6 +46,30 @@ class DeviationCalculator:
             baseline
         )
 
+    @staticmethod
+    def entropy_with_fallback(snapshot, min_org_observations=None):
+        current = snapshot.packet_features["entropy"]
+        total_queries = snapshot.host_profile.get("total_queries", 0)
+
+        if total_queries >= 2:
+            baseline = snapshot.host_profile.get("average_entropy", 0.0)
+            return DeviationCalculator.normalize(current, baseline)
+
+        threshold = (
+            min_org_observations
+            if min_org_observations is not None
+            else getattr(Config, "MIN_ORG_CALIBRATION_QUERIES", 20)
+        )
+        org = snapshot.organization_profile or {}
+        org_queries = org.get("total_queries", 0)
+        org_entropy = org.get("average_entropy", 0.0)
+        org_len = org.get("average_domain_length", 0.0)
+
+        if org_queries >= threshold and org_entropy > 0.0 and org_len > 0.0:
+            return DeviationCalculator.normalize(current, org_entropy)
+
+        return 0.0
+
     # --------------------------------------------------
     # Domain Length Deviation
     # --------------------------------------------------
@@ -73,6 +97,30 @@ class DeviationCalculator:
             current,
             baseline
         )
+
+    @staticmethod
+    def domain_length_with_fallback(snapshot, min_org_observations=None):
+        current = snapshot.packet_features["domain_length"]
+        total_queries = snapshot.host_profile.get("total_queries", 0)
+
+        if total_queries >= 2:
+            baseline = snapshot.host_profile.get("average_domain_length", 0.0)
+            return DeviationCalculator.normalize(current, baseline)
+
+        threshold = (
+            min_org_observations
+            if min_org_observations is not None
+            else getattr(Config, "MIN_ORG_CALIBRATION_QUERIES", 20)
+        )
+        org = snapshot.organization_profile or {}
+        org_queries = org.get("total_queries", 0)
+        org_entropy = org.get("average_entropy", 0.0)
+        org_len = org.get("average_domain_length", 0.0)
+
+        if org_queries >= threshold and org_entropy > 0.0 and org_len > 0.0:
+            return DeviationCalculator.normalize(current, org_len)
+
+        return 0.0
 
     # --------------------------------------------------
     # Query Rate Deviation

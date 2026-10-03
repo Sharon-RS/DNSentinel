@@ -211,6 +211,54 @@ def generate_synthetic_datasets():
     print(f"[+] Generated synthetic poisoning attack stream: {len(poison_events)} queries -> {poison_path.name}")
 
 
+def generate_benign_new_host_dataset():
+    """
+    Generates a 100-query stream for an unprofiled, legitimate enterprise host
+    connecting for the first time. Used to evaluate false positive rates during
+    and after cold-start calibration.
+    """
+    out_path = DATASETS_DIR / "lab_trace_benign_new_host.jsonl"
+    new_host = "10.20.30.40"
+    common_domains = [
+        "google.com", "github.com", "microsoft.com", "ubuntu.com",
+        "stackoverflow.com", "wikipedia.org", "slack.com", "zoom.us",
+        "python.org", "pypi.org", "docs.python.org", "office.com",
+        "linkedin.com", "cloudflare.com", "mozilla.org", "amazon.com"
+    ]
+
+    events = []
+    current_time = 1720000000.0
+
+    for i in range(100):
+        # Spaced 0.8 - 2.5 seconds apart (steady human browsing, <= 1.25 QPS)
+        current_time += 1.2 + (i % 5) * 0.2
+        domain = common_domains[i % len(common_domains)]
+        raw_event = {
+            "timestamp": current_time,
+            "source_ip": new_host,
+            "domain": domain,
+            "query_type": 1,
+            "packet_size": len(domain) + 40
+        }
+        features = extractor.extract(raw_event)
+        features["timestamp"] = current_time
+
+        events.append({
+            "timestamp": round(current_time, 4),
+            "host": new_host,
+            "domain": domain,
+            "features": features,
+            "label": 0,
+            "provenance": "synthetic_benign_new_host_scenario"
+        })
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        for ev in events:
+            f.write(json.dumps(ev) + "\n")
+    print(f"[+] Generated benign new-host benchmark stream: {len(events)} queries -> {out_path.name}")
+
+
 if __name__ == "__main__":
     parse_real_lab_traces()
     generate_synthetic_datasets()
+    generate_benign_new_host_dataset()

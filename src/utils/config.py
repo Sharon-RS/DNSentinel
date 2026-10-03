@@ -56,6 +56,15 @@ class Config:
     BASELINE_QUERY_RATE = 2.0
 
     # ==========================================
+    # COLD-START CALIBRATION PARAMETERS
+    # ==========================================
+
+    COLD_START_CALIBRATION_QUERIES = 10
+    MIN_ORG_CALIBRATION_QUERIES = 20
+    CALIBRATION_MAX_ENTROPY = 4.5
+    CALIBRATION_MAX_LENGTH = 45
+
+    # ==========================================
     # RISK ENGINE
     # ==========================================
 

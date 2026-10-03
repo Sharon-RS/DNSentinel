@@ -1,3 +1,5 @@
+import math
+import time
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional
 
@@ -13,12 +15,24 @@ class EvaluationMetrics:
     true_negatives: int
     false_negatives: int
     accuracy: float
+    # Binary metrics (Target Class: Tunneling / Positive)
     precision: float
     recall: float
     f1_score: float
+    binary_precision: float
+    binary_recall: float
+    binary_f1: float
+    # Class-weighted metrics (Weighted by class support N_0, N_1)
+    weighted_precision: float
+    weighted_recall: float
+    weighted_f1: float
     false_positive_rate: float
     false_negative_rate: float
     baseline_contamination_count: int
+    # Empirical latency measurements (milliseconds per query)
+    mean_latency_ms: float
+    median_latency_ms: float
+    p99_latency_ms: float
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -55,6 +69,7 @@ class DNSentinelEvaluator:
         tn = 0
         fn = 0
         contamination_count = 0
+        latencies_ms = []
 
         for event in events:
             host = event["host"]
@@ -62,7 +77,10 @@ class DNSentinelEvaluator:
             features = event["features"]
             true_label = int(event["label"])
 
+            t_start = time.perf_counter_ns()
             result = active_pipeline.process(host, domain, features)
+            t_end = time.perf_counter_ns()
+            latencies_ms.append((t_end - t_start) / 1_000_000.0)
 
             # Classify: SUSPICIOUS and HIGH_RISK are flagged as positive (tunneling)
             predicted_label = 1 if result["risk_level"] in ("SUSPICIOUS", "HIGH_RISK") else 0
@@ -83,15 +101,64 @@ class DNSentinelEvaluator:
 
         total = tp + fp + tn + fn
         accuracy = round((tp + tn) / total, 4) if total > 0 else 0.0
-        precision = round(tp / (tp + fp), 4) if (tp + fp) > 0 else 0.0
-        recall = round(tp / (tp + fn), 4) if (tp + fn) > 0 else 0.0
-        f1 = (
-            round(2 * (precision * recall) / (precision + recall), 4)
-            if (precision + recall) > 0
+
+        # Binary metrics (Class 1 = Tunneling)
+        bin_prec = round(tp / (tp + fp), 4) if (tp + fp) > 0 else 0.0
+        bin_rec = round(tp / (tp + fn), 4) if (tp + fn) > 0 else 0.0
+        bin_f1 = (
+            round(2 * (bin_prec * bin_rec) / (bin_prec + bin_rec), 4)
+            if (bin_prec + bin_rec) > 0
             else 0.0
         )
+
         fpr = round(fp / (fp + tn), 4) if (fp + tn) > 0 else 0.0
         fnr = round(fn / (fn + tp), 4) if (fn + tp) > 0 else 0.0
+
+        # Benign metrics (Class 0) for weighted average
+        benign_prec = round(tn / (tn + fn), 4) if (tn + fn) > 0 else 0.0
+        benign_rec = round(tn / (tn + fp), 4) if (tn + fp) > 0 else 0.0
+        benign_f1 = (
+            round(2 * (benign_prec * benign_rec) / (benign_prec + benign_rec), 4)
+            if (benign_prec + benign_rec) > 0
+            else 0.0
+        )
+
+        n_benign = tn + fp
+        n_malicious = tp + fn
+        if total > 0:
+            weighted_prec = round(
+                (n_benign * benign_prec + n_malicious * bin_prec) / total,
+                4
+            )
+            weighted_rec = round(
+                (n_benign * benign_rec + n_malicious * bin_rec) / total,
+                4
+            )
+            weighted_f1 = round(
+                (n_benign * benign_f1 + n_malicious * bin_f1) / total,
+                4
+            )
+        else:
+            weighted_prec = 0.0
+            weighted_rec = 0.0
+            weighted_f1 = 0.0
+
+        # Empirical Latency Statistics (ms)
+        if latencies_ms:
+            sorted_lat = sorted(latencies_ms)
+            n_lat = len(sorted_lat)
+            mean_lat = round(sum(sorted_lat) / n_lat, 4)
+            med_lat = round(
+                sorted_lat[n_lat // 2]
+                if n_lat % 2 != 0
+                else (sorted_lat[n_lat // 2 - 1] + sorted_lat[n_lat // 2]) / 2.0,
+                4
+            )
+            # Nearest-rank definition for p99 percentile: rank = ceil(0.99 * N), clamped to [1, N]
+            rank = min(max(math.ceil(0.99 * n_lat), 1), n_lat)
+            p99_lat = round(sorted_lat[rank - 1], 4)
+        else:
+            mean_lat, med_lat, p99_lat = 0.0, 0.0, 0.0
 
         return EvaluationMetrics(
             total_samples=total,
@@ -100,12 +167,21 @@ class DNSentinelEvaluator:
             true_negatives=tn,
             false_negatives=fn,
             accuracy=accuracy,
-            precision=precision,
-            recall=recall,
-            f1_score=f1,
+            precision=bin_prec,
+            recall=bin_rec,
+            f1_score=bin_f1,
+            binary_precision=bin_prec,
+            binary_recall=bin_rec,
+            binary_f1=bin_f1,
+            weighted_precision=weighted_prec,
+            weighted_recall=weighted_rec,
+            weighted_f1=weighted_f1,
             false_positive_rate=fpr,
             false_negative_rate=fnr,
-            baseline_contamination_count=contamination_count
+            baseline_contamination_count=contamination_count,
+            mean_latency_ms=mean_lat,
+            median_latency_ms=med_lat,
+            p99_latency_ms=p99_lat
         )
 
     @classmethod

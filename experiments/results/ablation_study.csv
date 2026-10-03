@@ -1,0 +1,5 @@
+tier,weights,accuracy,binary_precision,binary_recall,binary_f1,false_positive_rate,false_negative_rate,tp,fp,tn,fn,mean_dev_entropy_tunnel,mean_dev_length_tunnel,mean_dev_rate_tunnel,mean_dev_novel_tunnel,mean_dev_rarity_tunnel,mean_dev_entropy_benign,mean_dev_length_benign,mean_dev_rate_benign,mean_dev_novel_benign,mean_dev_rarity_benign
+Tier A: Lexical Only,"{'entropy': 0.5556, 'length': 0.4444}",1.0,1.0,1.0,1.0,0.0,0.0,38,0,162,0,0.3051,1.0,0.0,1.0,1.0,0.0633,0.1805,0.0,0.0309,0.0556
+Tier B: + Host Behavioral,"{'entropy': 0.3846, 'length': 0.3077, 'novel': 0.3077}",1.0,1.0,1.0,1.0,0.0,0.0,38,0,162,0,0.3051,1.0,0.0,1.0,1.0,0.0633,0.1805,0.0,0.0309,0.0556
+Tier C: + Temporal Rate,"{'entropy': 0.3125, 'length': 0.25, 'novel': 0.25, 'rate': 0.1875}",1.0,1.0,1.0,1.0,0.0,0.0,38,0,162,0,0.3051,1.0,0.0,1.0,1.0,0.0633,0.1805,0.0,0.0309,0.0556
+Tier D: Full Composite (+ Org),"{'entropy': 0.25, 'length': 0.2, 'novel': 0.2, 'rate': 0.15, 'rarity': 0.2}",1.0,1.0,1.0,1.0,0.0,0.0,38,0,162,0,0.3051,1.0,0.0,1.0,1.0,0.0633,0.1805,0.0,0.0309,0.0556

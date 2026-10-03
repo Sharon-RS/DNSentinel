@@ -144,6 +144,48 @@ def test_unprotected_control_behavior():
     print("[PASS] test_unprotected_control_behavior passed.")
 
 
+def test_static_rule_evaluator():
+    """Verify that StaticRuleEvaluator enforces the exact specified heuristic rule."""
+    from experiments.evaluator import StaticRuleEvaluator
+
+    # Rule: Alert = True iff (Entropy >= 4.0 AND Domain Length >= 30) OR (Query Type not in {1, 28})
+
+    # Case 1: High entropy AND high length, qtype=1 -> Alert
+    ev1 = {"domain": "abcdef1234567890abcdef1234567890.xyz", "features": {"entropy": 4.5, "domain_length": 37, "query_type": 1}, "label": 1}
+    assert StaticRuleEvaluator.classify_event(ev1) == 1
+
+    # Case 2: High entropy BUT short length (< 30), qtype=1 -> No alert
+    ev2 = {"domain": "abcdef.xyz", "features": {"entropy": 4.5, "domain_length": 10, "query_type": 1}, "label": 0}
+    assert StaticRuleEvaluator.classify_event(ev2) == 0
+
+    # Case 3: Low entropy (< 4.0) BUT long length (>= 30), qtype=1 -> No alert
+    ev3 = {"domain": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.xyz", "features": {"entropy": 2.1, "domain_length": 34, "query_type": 1}, "label": 0}
+    assert StaticRuleEvaluator.classify_event(ev3) == 0
+
+    # Case 4: Non-standard query type (16 = TXT, not in {1, 28}) -> Alert regardless of entropy/length
+    ev4 = {"domain": "example.com", "features": {"entropy": 2.5, "domain_length": 11, "query_type": 16}, "label": 1}
+    assert StaticRuleEvaluator.classify_event(ev4) == 1
+
+    # Case 5: Standard IPv6 query type (28 = AAAA) with normal entropy/length -> No alert
+    ev5 = {"domain": "example.com", "features": {"entropy": 2.5, "domain_length": 11, "query_type": 28}, "label": 0}
+    assert StaticRuleEvaluator.classify_event(ev5) == 0
+
+    # Stream evaluation
+    evaluator = StaticRuleEvaluator()
+    metrics = evaluator.evaluate_stream([ev1, ev2, ev3, ev4, ev5])
+    assert metrics.total_samples == 5
+    assert metrics.true_positives == 2
+    assert metrics.true_negatives == 3
+    assert metrics.false_positives == 0
+    assert metrics.false_negatives == 0
+    assert metrics.accuracy == 1.0
+    assert metrics.binary_precision == 1.0
+    assert metrics.binary_recall == 1.0
+    assert metrics.binary_f1 == 1.0
+
+    print("[PASS] test_static_rule_evaluator passed.")
+
+
 def test_live_data_immutability():
     """Verify live data remains 100% bitwise immutable before and after test execution."""
     live_profiles_dir = Config.PROJECT_ROOT / "data" / "profiles"
@@ -168,6 +210,7 @@ if __name__ == "__main__":
     test_dataset_provenance_and_schema()
     test_ablation_weights_renormalization()
     test_evaluator_metrics_calculation()
+    test_static_rule_evaluator()
     test_unprotected_control_behavior()
     test_live_data_immutability()
     print("\nALL EXPERIMENT SUITE UNIT TESTS PASSED SUCCESSFULLY.")

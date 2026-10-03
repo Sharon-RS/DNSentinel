@@ -1,7 +1,13 @@
 """
-Tier 2C Mechanism Validation: 4-Tier Feature Ablation Study.
-Implements the approved weight-renormalization methodology to keep score scales
-uniform at [0, 100] across all ablation tiers.
+Weight-Renormalized Feature-Tier Sensitivity Analysis.
+Evaluates DNSentinel composite detection sensitivity across progressive feature tiers
+(Tier A: Lexical -> Tier B: +Host Behavioral -> Tier C: +Temporal Rate -> Tier D: Full Composite).
+
+Methodological Disclaimer:
+The measured performance differences reflect the sensitivity of the composite engine to the
+inclusion of specific feature tiers under uniform scale renormalization ([0, 100]), and do NOT
+represent pure causal contributions of individual features in isolation because renormalization
+inherently shifts the relative weight distribution among remaining active components.
 """
 
 import json
@@ -44,7 +50,7 @@ def _safe_mean(vals: List[float]) -> float:
 class AblatedDeviationEngine(BehaviorDeviationEngine):
     """
     Subclasses BehaviorDeviationEngine to dynamically apply renormalized weights
-    for feature ablation without modifying production configuration.
+    for feature sensitivity analysis without modifying production configuration.
     """
 
     def __init__(self, active_weights: Dict[str, float]):
@@ -141,6 +147,12 @@ def evaluate_ablation_tier(
         "mean_dev_length_tunnel": _safe_mean(devs_tunnel["length"]),
         "mean_dev_rate_tunnel": _safe_mean(devs_tunnel["rate"]),
         "mean_dev_novel_tunnel": _safe_mean(devs_tunnel["novel"]),
+        "mean_dev_rarity_tunnel": _safe_mean(devs_tunnel["rarity"]),
+        "mean_dev_entropy_benign": _safe_mean(devs_benign["entropy"]),
+        "mean_dev_length_benign": _safe_mean(devs_benign["length"]),
+        "mean_dev_rate_benign": _safe_mean(devs_benign["rate"]),
+        "mean_dev_novel_benign": _safe_mean(devs_benign["novel"]),
+        "mean_dev_rarity_benign": _safe_mean(devs_benign["rarity"]),
     }
 
 
@@ -158,14 +170,16 @@ def run_ablation_study(dataset_path: str, output_csv: str = None):
         res = evaluate_ablation_tier(events, tier_info["name"], tier_info["raw_weights"])
         results.append(res)
 
-    print("\n" + "=" * 90)
-    print(" TIER 2C: 4-TIER FEATURE ABLATION STUDY (RENORMALIZED WEIGHTS)")
-    print("=" * 90)
+    print("\n" + "=" * 95)
+    print(" WEIGHT-RENORMALIZED FEATURE-TIER SENSITIVITY ANALYSIS")
+    print("=" * 95)
     print(f"{'Tier Name':<28} | {'Accuracy':<10} | {'Precision':<10} | {'Recall':<10} | {'F1-Score':<10} | {'FPR':<8}")
-    print("-" * 90)
+    print("-" * 95)
     for r in results:
         print(f"{r['tier']:<28} | {r['accuracy']:<10.4f} | {r['binary_precision']:<10.4f} | {r['binary_recall']:<10.4f} | {r['binary_f1']:<10.4f} | {r['false_positive_rate']:<8.4f}")
-    print("=" * 90 + "\n")
+    print("=" * 95)
+    print(" * Note: Differences reflect sensitivity under scale renormalization ([0, 100]), not pure causal attribution.")
+    print("=" * 95 + "\n")
 
     if output_csv:
         out_p = Path(output_csv)
@@ -174,7 +188,7 @@ def run_ablation_study(dataset_path: str, output_csv: str = None):
             writer = csv.DictWriter(f, fieldnames=results[0].keys())
             writer.writeheader()
             writer.writerows(results)
-        print(f"[+] Saved ablation results to {out_p}")
+        print(f"[+] Saved sensitivity analysis results to {out_p}")
 
     return results
 

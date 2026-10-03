@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from collections import Counter
 
 from src.utils.config import Config
@@ -19,10 +20,15 @@ class OrganizationProfile:
     should be learned. This class only manages the data.
     """
 
-    def __init__(self):
+    def __init__(self, data_dir=None):
+
+        self.data_dir = (
+            Path(data_dir) if data_dir is not None
+            else Config.DATA_DIR
+        )
 
         self.profile_path = (
-            Config.DATA_DIR
+            self.data_dir
             / "organization"
             / "organization.json"
         )

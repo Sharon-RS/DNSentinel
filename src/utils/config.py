@@ -26,6 +26,24 @@ class Config:
 
     LOG_DIR = PROJECT_ROOT / "logs"
 
+    @classmethod
+    def set_data_dir(cls, custom_dir):
+        """
+        Explicitly reconfigure DATA_DIR and dependent subdirectories.
+        Used for test and evaluation isolation.
+        """
+        cls.DATA_DIR = Path(custom_dir)
+        cls.PROFILE_DIR = cls.DATA_DIR / "profiles"
+        cls.HISTORY_DIR = cls.DATA_DIR / "history"
+        cls.DATASET_DIR = cls.DATA_DIR / "datasets"
+        cls.MODEL_DIR = cls.DATA_DIR / "models"
+        os.environ["DNSENTINEL_DATA_DIR"] = str(custom_dir)
+
+    @classmethod
+    def get_data_dir(cls):
+        """Return the currently configured data directory."""
+        return cls.DATA_DIR
+
     # ==========================================
     # FEATURE PARAMETERS
     # ==========================================
@@ -33,6 +51,9 @@ class Config:
     SLIDING_WINDOW_SIZE = 20
 
     SLIDING_WINDOW_SECONDS = 60
+
+    # Configurable design threshold (queries/second) chosen for current prototype
+    BASELINE_QUERY_RATE = 2.0
 
     # ==========================================
     # RISK ENGINE

@@ -1,4 +1,4 @@
-# from src.utils.config import Config
+from src.utils.config import Config
 
 
 class DeviationCalculator:
@@ -81,22 +81,37 @@ class DeviationCalculator:
     @staticmethod
     def query_rate(snapshot):
 
-        current = snapshot.window_statistics.get(
-            "query_rate",
-            0
+        current_rate = float(
+            snapshot.window_statistics.get(
+                "query_rate",
+                0.0
+            )
         )
 
-        previous_window_size = snapshot.window_statistics.get(
-            "previous_window_size",
-            0
+        baseline_rate = getattr(
+            Config,
+            "BASELINE_QUERY_RATE",
+            2.0
         )
 
-        if previous_window_size <= 0:
+        # Cold start: fewer than 2 queries in window, rate cannot be established
+        window_size = snapshot.window_statistics.get(
+            "window_size",
+            2
+        )
+        if window_size < 2 or current_rate <= 0.0:
             return 0.0
 
-        return DeviationCalculator.normalize(
-            current,
-            previous_window_size
+        # Normal steady traffic at or below design threshold receives zero deviation
+        if current_rate <= baseline_rate:
+            return 0.0
+
+        # Query burst: scales linearly from baseline_rate upward
+        deviation = (current_rate - baseline_rate) / baseline_rate
+
+        return round(
+            min(deviation, 1.0),
+            4
         )
 
     # --------------------------------------------------

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from src.behavior.host_profile import HostProfile
 from src.utils.config import Config
@@ -16,10 +17,15 @@ class HostProfileManager:
           decides that the observation is trusted
     """
 
-    def __init__(self):
+    def __init__(self, data_dir=None):
+
+        self.data_dir = (
+            Path(data_dir) if data_dir is not None
+            else Config.DATA_DIR
+        )
 
         self.profile_dir = (
-            Config.DATA_DIR / "profiles"
+            self.data_dir / "profiles"
         )
 
         self.profile_dir.mkdir(

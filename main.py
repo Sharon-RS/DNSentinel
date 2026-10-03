@@ -17,6 +17,10 @@ class DNSentinel:
             dns_event
         )
 
+        features["timestamp"] = dns_event.get(
+            "timestamp"
+        )
+
         result = self.pipeline.process(
 
             host=dns_event["source_ip"],

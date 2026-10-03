@@ -1,4 +1,6 @@
 from collections import deque
+from datetime import datetime
+import time
 
 
 class SlidingWindowManager:
@@ -32,11 +34,27 @@ class SlidingWindowManager:
         if host not in self.windows:
             self.create_window(host)
 
+        # Ingest timestamp: support float/int epoch seconds, ISO-format string, or default to time.time()
+        raw_ts = features.get("timestamp")
+        if raw_ts is not None:
+            if isinstance(raw_ts, (int, float)):
+                ts = float(raw_ts)
+            elif isinstance(raw_ts, str):
+                try:
+                    ts = datetime.fromisoformat(raw_ts).timestamp()
+                except ValueError:
+                    ts = time.time()
+            else:
+                ts = time.time()
+        else:
+            ts = time.time()
+
         observation = {
             "domain": domain,
             "entropy": float(features["entropy"]),
             "domain_length": int(features["domain_length"]),
-            "query_type": features["query_type"]
+            "query_type": features["query_type"],
+            "timestamp": ts
         }
 
         self.windows[host].append(observation)
@@ -73,6 +91,27 @@ class SlidingWindowManager:
         )
 
         # ----------------------------------------------
+        # Temporal Query Rate (QPS)
+        # ----------------------------------------------
+
+        if len(window) >= 2:
+
+            duration = max(
+                window[-1]["timestamp"] - window[0]["timestamp"],
+                0.001
+            )
+            query_rate = round(
+                (len(window) - 1) / duration,
+                4
+            )
+            window_duration = round(duration, 4)
+
+        else:
+
+            query_rate = 0.0
+            window_duration = 0.0
+
+        # ----------------------------------------------
         # Trends
         # ----------------------------------------------
 
@@ -100,6 +139,8 @@ class SlidingWindowManager:
         return {
             "window_size": len(window),
 
+            "window_duration": window_duration,
+
             "average_entropy": round(
                 total_entropy / len(window),
                 4
@@ -112,7 +153,7 @@ class SlidingWindowManager:
 
             "unique_domains": unique_domains,
 
-            "query_rate": len(window),
+            "query_rate": query_rate,
 
             "entropy_trend": round(
                 entropy_trend,
@@ -134,10 +175,11 @@ class SlidingWindowManager:
 
         return {
             "window_size": 0,
+            "window_duration": 0.0,
             "average_entropy": 0.0,
             "average_domain_length": 0.0,
             "unique_domains": 0,
-            "query_rate": 0,
+            "query_rate": 0.0,
             "entropy_trend": 0.0,
             "length_trend": 0.0
         }

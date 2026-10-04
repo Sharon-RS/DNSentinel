@@ -1,15 +1,21 @@
+import argparse
+
 from src.capture.dns_capture import DNSCapture
 from src.features.traditional_features import TraditionalFeatureExtractor
 from src.pipeline.detection_pipeline import DetectionPipeline
+from src.pipeline.cascade_pipeline import CascadeDetectionPipeline
 
 
 class DNSentinel:
 
-    def __init__(self):
+    def __init__(self, pipeline_type: str = "heuristic"):
 
         self.extractor = TraditionalFeatureExtractor()
 
-        self.pipeline = DetectionPipeline()
+        if pipeline_type == "cascade":
+            self.pipeline = CascadeDetectionPipeline()
+        else:
+            self.pipeline = DetectionPipeline()
 
     def process_dns_event(self, dns_event):
 
@@ -88,6 +94,12 @@ class DNSentinel:
         print(f"Confidence  : {result['confidence']}")
         print(f"Baseline Updated : "f"{result['baseline_updated']}")
 
+        if result.get("ml_enabled"):
+            print(f"Cascade Path     : {result.get('cascade_path')}")
+            print(f"Cascade Decision : {result.get('cascade_decision')}")
+            if result.get("ml_probability") is not None:
+                print(f"ML Probability   : {result.get('ml_probability')}")
+
         print()
 
         print(f"Recommendation:")
@@ -98,7 +110,7 @@ class DNSentinel:
 
         print()
 
-    def start(self):
+    def start(self, interface: str = "ens33"):
 
         capture = DNSCapture(
 
@@ -106,11 +118,20 @@ class DNSentinel:
 
         )
 
-        capture.start(interface="ens33")
+        capture.start(interface=interface)
 
 
 if __name__ == "__main__":
 
-    detector = DNSentinel()
+    parser = argparse.ArgumentParser(description="DNSentinel: Adaptive DNS Tunneling Detection")
+    parser.add_argument(
+        "--pipeline",
+        choices=["heuristic", "cascade"],
+        default="heuristic",
+        help="Detection pipeline engine to use (default: heuristic)"
+    )
+    args = parser.parse_args()
+
+    detector = DNSentinel(pipeline_type=args.pipeline)
 
     detector.start()

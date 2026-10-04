@@ -1,0 +1,38 @@
+config_id,stage,score_ceiling,entropy_ceiling,length_ceiling,min_spacing_s,quorum_n,multi_host_quorum_h,lexical_invariance,damping_alpha,brr,k_grad,t_grad_s,mgr,c_base,drift_entropy,drift_length,malicious_recall,fpr_benign,fnr_malicious,crr,overhead_ms,pger,stackoverflow_graduated,notes
+C00_BASELINE_CONTROL,Stage 0: Baseline Control,65.0,4.0,30,30.0,5,2,exact_fqdn,0.05,0.0,-1,-1.0,0.0,42,2.9882,10.3462,0.8746,0.1765,0.1254,0.0,0.1919,0.5,False,Current production quarantine-lock (ABDG disabled)
+C01_REFERENCE_HYPOTHESIS,Stage 1: Reference Hypothesis,65.0,4.0,30,30.0,5,2,exact_fqdn,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1743,0.5,True,"Hypothesized balanced baseline (tau_score=65, tau_ent=4.0, tau_len=30, dt=30s, N=5, H=2, alpha=0.05)"
+C02_SCORE_55,Stage 2: OAT Score Ceiling,55.0,4.0,30,30.0,5,2,exact_fqdn,0.05,0.0,-1,-1.0,0.0,42,2.9882,10.3462,0.8746,0.1765,0.1254,0.0,0.1675,0.5,False,OAT sweep: tau_score=55.0
+C02_SCORE_60,Stage 2: OAT Score Ceiling,60.0,4.0,30,30.0,5,2,exact_fqdn,0.05,0.0,-1,-1.0,0.0,42,2.9882,10.3462,0.8746,0.1765,0.1254,0.3333,0.1745,0.5,False,OAT sweep: tau_score=60.0
+C02_SCORE_70,Stage 2: OAT Score Ceiling,70.0,4.0,30,30.0,5,2,exact_fqdn,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1832,0.5,True,OAT sweep: tau_score=70.0
+C03_ENTROPY_3.6,Stage 2: OAT Entropy Ceiling,65.0,3.6,30,30.0,5,2,exact_fqdn,0.05,0.0,-1,-1.0,0.0,42,2.9882,10.3462,0.8746,0.1765,0.1254,0.0,0.1727,0.5,False,OAT sweep: tau_ent=3.6
+C03_ENTROPY_3.8,Stage 2: OAT Entropy Ceiling,65.0,3.8,30,30.0,5,2,exact_fqdn,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1705,0.5,True,OAT sweep: tau_ent=3.8
+C03_ENTROPY_4.2,Stage 2: OAT Entropy Ceiling,65.0,4.2,30,30.0,5,2,exact_fqdn,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1632,0.5,True,OAT sweep: tau_ent=4.2
+C04_LENGTH_20,Stage 2: OAT Length Ceiling,65.0,4.0,20,30.0,5,2,exact_fqdn,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1735,0.5,True,OAT sweep: tau_len=20
+C04_LENGTH_25,Stage 2: OAT Length Ceiling,65.0,4.0,25,30.0,5,2,exact_fqdn,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1713,0.5,True,OAT sweep: tau_len=25
+C04_LENGTH_35,Stage 2: OAT Length Ceiling,65.0,4.0,35,30.0,5,2,exact_fqdn,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1744,0.5,True,OAT sweep: tau_len=35
+C05_SPACING_10S,Stage 2: OAT Spacing,65.0,4.0,30,10.0,5,2,exact_fqdn,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1642,0.5,True,OAT sweep: delta_t_min=10.0s
+C05_SPACING_60S,Stage 2: OAT Spacing,65.0,4.0,30,60.0,5,2,exact_fqdn,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1691,0.5,True,OAT sweep: delta_t_min=60.0s
+C05_SPACING_300S,Stage 2: OAT Spacing,65.0,4.0,30,300.0,5,2,exact_fqdn,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1718,0.5,True,OAT sweep: delta_t_min=300.0s
+C06_QUORUM_N_3,Stage 2: OAT Quorum N,65.0,4.0,30,30.0,3,2,exact_fqdn,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1676,0.5,True,OAT sweep: N_quorum=3
+C06_QUORUM_N_7,Stage 2: OAT Quorum N,65.0,4.0,30,30.0,7,2,exact_fqdn,0.05,1.0,66,28490.83,0.0,42,2.9594,10.4,0.8746,0.1345,0.1254,0.0,0.1686,0.5,True,OAT sweep: N_quorum=7
+C06_QUORUM_N_10,Stage 2: OAT Quorum N,65.0,4.0,30,30.0,10,2,exact_fqdn,0.05,1.0,103,3753776.67,0.0,42,3.0233,10.6789,0.8746,0.1765,0.1254,0.0,0.1699,0.5,True,OAT sweep: N_quorum=10
+C07_MULTI_HOST_H_1,Stage 2: OAT Multi-Host H,65.0,4.0,30,30.0,5,1,exact_fqdn,0.05,1.0,48,26375.6,0.0217,104,2.9594,10.4,0.6985,0.1597,0.3015,0.0,0.1871,0.5,True,OAT sweep: H_quorum=1
+C07_MULTI_HOST_H_3,Stage 2: OAT Multi-Host H,65.0,4.0,30,30.0,5,3,exact_fqdn,0.05,1.0,111,3755588.57,0.0,42,3.0233,10.6789,0.8746,0.1681,0.1254,0.0,0.1512,0.5,True,OAT sweep: H_quorum=3
+C08_LEXICAL_SLD_STATIC_SUBDOMAIN,Stage 2: OAT Lexical Invariance,65.0,4.0,30,30.0,5,2,sld_static_subdomain,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.2,0.1668,0.5,True,OAT sweep: sigma_lex=sld_static_subdomain
+C08_LEXICAL_SLD_ONLY,Stage 2: OAT Lexical Invariance,65.0,4.0,30,30.0,5,2,sld_only,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.2,0.1716,0.5,True,OAT sweep: sigma_lex=sld_only
+C09_DAMPING_0.01,Stage 2: OAT Damping Alpha,65.0,4.0,30,30.0,5,2,exact_fqdn,0.01,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.174,0.5,True,OAT sweep: alpha=0.01
+C09_DAMPING_0.1,Stage 2: OAT Damping Alpha,65.0,4.0,30,30.0,5,2,exact_fqdn,0.1,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1645,0.5,True,OAT sweep: alpha=0.1
+C09_DAMPING_0.2,Stage 2: OAT Damping Alpha,65.0,4.0,30,30.0,5,2,exact_fqdn,0.2,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1736,0.5,True,OAT sweep: alpha=0.2
+C10_BOTNET_H1_DT10_SCORE70,Stage 3: Interaction Botnet Vulnerability,70.0,4.0,30,10.0,3,1,exact_fqdn,0.05,1.0,33,2095.41,0.0217,110,2.9336,10.4483,0.6806,0.1429,0.3194,0.0,0.1953,0.5,True,High-risk single-host rapid beaconing profile
+C11_BOTNET_H1_DT60_SCORE65,Stage 3: Interaction Botnet Vulnerability,65.0,4.0,30,60.0,5,1,exact_fqdn,0.05,1.0,48,26375.6,0.0217,79,2.9594,10.4,0.7731,0.1597,0.2269,0.0,0.184,0.5,True,Single-host slow beaconing profile
+C12_BOTNET_H2_DT10_SCORE70,Stage 3: Interaction Botnet Vulnerability,70.0,4.0,30,10.0,5,2,exact_fqdn,0.05,1.0,61,28114.07,0.0072,88,2.9594,10.4,0.7403,0.1261,0.2597,0.0,0.1879,0.5,True,Dual-host rapid burst profile
+C13_BOTNET_H3_DT60_SCORE70,Stage 3: Interaction Botnet Vulnerability,70.0,4.0,30,60.0,7,3,exact_fqdn,0.05,1.0,111,3755588.57,0.0,42,3.0233,10.6789,0.8746,0.1681,0.1254,0.0,0.1712,0.5,True,Tri-host distributed stealth profile
+C14_LEX_SLD_ONLY_LEN20_N3,Stage 3: Interaction Lexical Flaw,65.0,4.0,20,30.0,3,2,sld_only,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.3333,0.175,0.5,True,Aggressive SLD grouping with short length constraint
+C15_LEX_SLD_ONLY_LEN35_N7,Stage 3: Interaction Lexical Flaw,65.0,4.0,35,30.0,7,2,sld_only,0.05,1.0,66,28490.83,0.0,42,2.9594,10.4,0.8746,0.1345,0.1254,0.2,0.1732,0.5,True,Permissive SLD grouping with long length tolerance
+C16_LEX_STATIC_SUB_LEN25_N3,Stage 3: Interaction Lexical Flaw,65.0,4.0,25,30.0,3,2,sld_static_subdomain,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.3333,0.1596,0.5,True,Subdomain variance check with moderate length ceiling
+C17_LEX_STATIC_SUB_LEN35_N7,Stage 3: Interaction Lexical Flaw,65.0,4.0,35,30.0,7,2,sld_static_subdomain,0.05,1.0,66,28490.83,0.0,42,2.9594,10.4,0.8746,0.1345,0.1254,0.2,0.1509,0.5,True,Subdomain variance check with enterprise length tolerance
+C18_PERMISSIVE_EXTREME,Stage 3: Composite Archetype,70.0,4.2,35,10.0,3,1,sld_only,0.2,1.0,33,2095.41,0.0217,110,2.9373,10.5424,0.6806,0.1345,0.3194,0.2857,0.1762,0.5,True,Permissive / high-poisoning vulnerability baseline
+C19_DEFENSIVE_STRICT,Stage 3: Composite Archetype,55.0,3.6,20,300.0,10,3,exact_fqdn,0.01,0.0,-1,-1.0,0.0,42,2.9882,10.3462,0.8746,0.1765,0.1254,0.0,0.1612,0.5,False,Ultra-strict defensive configuration
+C20_ENTERPRISE_STATIC_BALANCED,Stage 3: Composite Archetype,65.0,4.0,30,30.0,5,2,sld_static_subdomain,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.2,0.1726,0.5,True,Recommended candidate: SLD static subdomain with dual-host consensus
+C21_RAPID_SESSION_RECOVERY,Stage 3: Composite Archetype,65.0,4.0,30,10.0,3,2,exact_fqdn,0.05,1.0,61,28114.07,0.0,42,2.9594,10.4,0.8746,0.1261,0.1254,0.0,0.1727,0.5,True,Low spacing and low quorum for fast human browsing adaptation
+C22_CONSERVATIVE_ENTERPRISE,Stage 3: Composite Archetype,60.0,3.8,25,60.0,7,2,exact_fqdn,0.05,0.0,-1,-1.0,0.0,42,2.9882,10.3462,0.8746,0.1765,0.1254,0.3333,0.15,0.5,False,Conservative enterprise bounds

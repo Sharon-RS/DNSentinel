@@ -1,0 +1,23 @@
+{
+    "total_samples": 115,
+    "true_positives": 36,
+    "false_positives": 0,
+    "true_negatives": 0,
+    "false_negatives": 79,
+    "accuracy": 0.313,
+    "precision": 1.0,
+    "recall": 0.313,
+    "f1_score": 0.4768,
+    "binary_precision": 1.0,
+    "binary_recall": 0.313,
+    "binary_f1": 0.4768,
+    "weighted_precision": 1.0,
+    "weighted_recall": 0.313,
+    "weighted_f1": 0.4768,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": 0.687,
+    "baseline_contamination_count": 79,
+    "mean_latency_ms": 0.4058,
+    "median_latency_ms": 0.2811,
+    "p99_latency_ms": 2.4842
+}

@@ -1,0 +1,31 @@
+regime,query_index,interval_seconds,measured_qps,window_duration_seconds,rate_deviation,behavior_score,risk_level
+Sub-Threshold Steady,1,1.5,0.0,0.0,0.0,0.0,NORMAL
+Sub-Threshold Steady,2,1.5,0.6667,1.5,0.0,20.0,NORMAL
+Sub-Threshold Steady,3,1.5,0.6667,3.0,0.0,20.0,NORMAL
+Sub-Threshold Steady,4,1.5,0.6667,4.5,0.0,20.0,NORMAL
+Sub-Threshold Steady,5,1.5,0.6667,6.0,0.0,20.0,NORMAL
+Sub-Threshold Steady,6,1.5,0.6667,7.5,0.0,40.0,LOW_RISK
+Sub-Threshold Steady,7,1.5,0.6667,9.0,0.0,40.0,LOW_RISK
+Sub-Threshold Steady,8,1.5,0.6667,10.5,0.0,40.0,LOW_RISK
+Sub-Threshold Steady,9,1.5,0.6667,12.0,0.0,40.0,LOW_RISK
+Sub-Threshold Steady,10,1.5,0.6667,13.5,0.0,40.0,LOW_RISK
+At-Threshold Limit,1,0.5,0.0,0.0,0.0,0.0,NORMAL
+At-Threshold Limit,2,0.5,2.0,0.5,0.0,10.0,NORMAL
+At-Threshold Limit,3,0.5,2.0,1.0,0.0,10.0,NORMAL
+At-Threshold Limit,4,0.5,2.0,1.5,0.0,10.0,NORMAL
+At-Threshold Limit,5,0.5,2.0,2.0,0.0,10.0,NORMAL
+At-Threshold Limit,6,0.5,2.0,2.5,0.0,30.0,LOW_RISK
+At-Threshold Limit,7,0.5,2.0,3.0,0.0,30.0,LOW_RISK
+At-Threshold Limit,8,0.5,2.0,3.5,0.0,30.0,LOW_RISK
+At-Threshold Limit,9,0.5,2.0,4.0,0.0,30.0,LOW_RISK
+At-Threshold Limit,10,0.5,2.0,4.5,0.0,30.0,LOW_RISK
+High-Speed Tunnel Burst,1,0.04,0.0,0.0,0.0,0.0,NORMAL
+High-Speed Tunnel Burst,2,0.04,25.0,0.04,1.0,21.67,NORMAL
+High-Speed Tunnel Burst,3,0.04,25.0,0.08,1.0,21.67,NORMAL
+High-Speed Tunnel Burst,4,0.04,25.0,0.12,1.0,21.67,NORMAL
+High-Speed Tunnel Burst,5,0.04,25.0,0.16,1.0,21.67,NORMAL
+High-Speed Tunnel Burst,6,0.04,25.0,0.2,1.0,41.67,LOW_RISK
+High-Speed Tunnel Burst,7,0.04,25.0,0.24,1.0,41.67,LOW_RISK
+High-Speed Tunnel Burst,8,0.04,25.0,0.28,1.0,41.67,LOW_RISK
+High-Speed Tunnel Burst,9,0.04,25.0,0.32,1.0,41.67,LOW_RISK
+High-Speed Tunnel Burst,10,0.04,25.0,0.36,1.0,41.67,LOW_RISK

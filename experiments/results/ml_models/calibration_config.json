@@ -1,0 +1,21 @@
+{
+  "max_operational_fpr": 0.05,
+  "behavioral_threshold": 62.0,
+  "behavioral_val_recall": 1.0,
+  "behavioral_val_fpr": 0.0312,
+  "ml30_threshold": 0.185,
+  "ml30_val_recall": 1.0,
+  "ml30_val_fpr": 0.0,
+  "ml31_threshold": 0.15,
+  "ml31_val_recall": 1.0,
+  "ml31_val_fpr": 0.0,
+  "hybrid_beta": 0.05,
+  "hybrid_threshold": 20.5,
+  "hybrid_val_recall": 1.0,
+  "hybrid_val_fpr": 0.0,
+  "cascade_s_low": 20.0,
+  "cascade_s_high": 70.0,
+  "cascade_ml_threshold": 0.2,
+  "cascade_val_recall": 1.0,
+  "cascade_val_fpr": 0.0
+}

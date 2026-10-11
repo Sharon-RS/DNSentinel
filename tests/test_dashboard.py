@@ -790,10 +790,15 @@ def test_tunnel_replay_toolbar_buttons_and_modes():
     assert 'id="btn-replay-tunnel-cascade"' in html_content
     assert "ML30 Cascade" in html_content
 
+    # Verify ML30 + Burst-Taint button exists
+    assert 'id="btn-replay-tunnel-taint"' in html_content
+    assert "ML30 + Burst-Taint" in html_content
+
     # Verify distinct labels and tooltips
     assert 'title="DEMO REPLAY — PIPELINE A1 / UNMITIGATED COLD START (lab_trace_tunnel_burst.jsonl, 115 Queries)"' in html_content
     assert 'title="RESEARCH REPLAY — PIPELINE B (ENTERPRISE PRIOR: lab_trace_tunnel_burst.jsonl, 115 Queries)"' in html_content
     assert 'title="LIVE TIERED CASCADE — ML30 (RANDOM FOREST: lab_trace_tunnel_burst.jsonl, 115 Queries)"' in html_content
+    assert 'title="EXPERIMENTAL CASCADE — BURST TAINT PROPAGATION (ML30 + BURST TAINT: lab_trace_tunnel_burst.jsonl, 115 Queries)"' in html_content
 
     # Verify app.js element bindings and event listeners
     app_js_path = Config.PROJECT_ROOT / "dashboard" / "static" / "app.js"
@@ -803,14 +808,17 @@ def test_tunnel_replay_toolbar_buttons_and_modes():
     assert "btnReplayTunnel: document.getElementById('btn-replay-tunnel')" in app_js
     assert "btnReplayTunnelB: document.getElementById('btn-replay-tunnel-b')" in app_js
     assert "btnReplayTunnelCascade: document.getElementById('btn-replay-tunnel-cascade')" in app_js
+    assert "btnReplayTunnelTaint: document.getElementById('btn-replay-tunnel-taint')" in app_js
 
     assert "triggerReplay('tunnel')" in app_js
     assert "triggerReplay('tunnel_b')" in app_js
     assert "triggerReplay('tunnel_cascade')" in app_js
+    assert "triggerReplay('tunnel_taint')" in app_js
 
     # Verify button state management in triggerReplay
     assert "traceType === 'tunnel_b'" in app_js
     assert "traceType === 'tunnel_cascade'" in app_js
+    assert "traceType === 'tunnel_taint'" in app_js
 
     # Verify backend replay modes and immutability
     live_profiles_dir = Config.PROJECT_ROOT / "data" / "profiles"
@@ -861,6 +869,19 @@ def test_tunnel_replay_toolbar_buttons_and_modes():
     # Cascade events contain cascade metadata
     cascade_paths = [e["cascade_path"] for e in events_cascade if e.get("cascade_path")]
     assert len(cascade_paths) > 0, "ML30 Cascade must emit cascade_path telemetry"
+
+    # Mode 4: ML30 + Burst-Taint (tunnel_taint)
+    adapter.clear_session()
+    res_taint = adapter.replay_dataset("tunnel_taint", max_records=20)
+    assert res_taint["status"] == "success"
+    assert res_taint["mode"] == "EXPERIMENTAL CASCADE — BURST TAINT PROPAGATION"
+    summary_taint = adapter.get_summary()
+    assert summary_taint["is_demo_replay"] is True
+    assert summary_taint["replay_mode"] == "EXPERIMENTAL CASCADE — BURST TAINT PROPAGATION"
+    events_taint = adapter.get_live_events(limit=5)
+    assert len(events_taint) > 0
+    assert "detection_source" in events_taint[0]
+    assert "taint_propagated" in events_taint[0]
 
     # Verify bitwise immutability
     post_profiles_hashes = compute_dir_hashes(live_profiles_dir)
@@ -999,6 +1020,18 @@ def test_http_api_endpoints():
             data = json.loads(res.read().decode("utf-8"))
             assert data["status"] == "success"
             assert data["mode"] == "LIVE TIERED CASCADE — ML30"
+
+        # POST /api/replay (ML30 + Burst-Taint mode)
+        req_tunnel_taint = urllib.request.Request(
+            f"{base_url}/api/replay",
+            data=json.dumps({"trace": "tunnel_taint", "max_records": 10}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req_tunnel_taint) as res:
+            assert res.status == 200
+            data = json.loads(res.read().decode("utf-8"))
+            assert data["status"] == "success"
+            assert data["mode"] == "EXPERIMENTAL CASCADE — BURST TAINT PROPAGATION"
 
         # GET /nonexistent-path (404 Error handling & logging regression test)
         try:
@@ -1230,6 +1263,65 @@ def test_system_status_integrity_hashes_and_models():
     print("[PASS] test_system_status_integrity_hashes_and_models passed.")
 
 
+def test_burst_taint_pipeline_selection_and_telemetry():
+    """
+    Verifies that:
+    1. replay_dataset('tunnel_taint') selects BurstTaintCascadePipeline and enables burst taint propagation.
+    2. Replaying the complete 115-query attack trace recovers the 4 periodic framing queries via taint propagation.
+    3. Baseline modes ('tunnel', 'tunnel_b', 'tunnel_cascade') remain mapped to their original pipelines.
+    4. Taint telemetry ('detection_source', 'taint_propagated') is accurately recorded on events and alerts.
+    """
+    adapter = DashboardAdapter()
+
+    # Run full 115 records with tunnel_taint
+    res = adapter.replay_dataset("tunnel_taint", max_records=115)
+    assert res["status"] == "success"
+    assert res["records_replayed"] == 115
+    assert res["mode"] == "EXPERIMENTAL CASCADE — BURST TAINT PROPAGATION"
+
+    summary = adapter.get_summary()
+    assert summary["high_risk_count"] == 114, f"Expected 114 HIGH_RISK detections (99.13% recall), got {summary['high_risk_count']}"
+    assert summary["low_risk_count"] == 1, f"Expected 1 LOW_RISK (initial handshake query #1), got {summary['low_risk_count']}"
+
+    # Check ring buffer telemetry
+    events = adapter.get_live_events(limit=115)
+    tainted_events = [e for e in events if e.get("taint_propagated") is True]
+    assert len(tainted_events) == 4, f"Expected exactly 4 taint-propagated queries, got {len(tainted_events)}"
+    for te in tainted_events:
+        assert te["detection_source"] == "TAINT_PROPAGATED"
+        assert te["cascade_path"] == "TAINT_PROPAGATED"
+        assert te["cascade_decision"] == "MALICIOUS"
+        assert te["risk_level"] == "HIGH_RISK"
+        assert te["baseline_status"] in ("Calibrating", "Not Updated", "Quarantined")
+
+    # Check alert queue (alert buffer is FIFO capped at 100, retaining 100 most recent of the 114 alerts)
+    alerts = adapter.get_alerts(limit=100)
+    tainted_alerts = [a for a in alerts if a.get("taint_propagated") is True]
+    assert len(tainted_alerts) == 3, f"Expected 3 taint-propagated queries in 100-alert window, got {len(tainted_alerts)}"
+    for ta in tainted_alerts:
+        assert ta["detection_source"] == "TAINT_PROPAGATED"
+        assert ta["cascade_path"] == "TAINT_PROPAGATED"
+        assert ta["risk_level"] == "HIGH_RISK"
+
+    # Verify all 4 taint-propagated queries enter alerts queue before FIFO eviction
+    adapter.clear_session()
+    adapter.replay_dataset("tunnel_taint", max_records=40)
+    alerts_40 = adapter.get_alerts()
+    tainted_alerts_40 = [a for a in alerts_40 if a.get("taint_propagated") is True]
+    assert len(tainted_alerts_40) == 4, f"Expected all 4 taint-propagated queries in 40-record window, got {len(tainted_alerts_40)}"
+
+    # Confirm baseline ML30 cascade replay mode still yields 110 detections (zero taint propagation)
+    adapter.clear_session()
+    res_base = adapter.replay_dataset("tunnel_cascade", max_records=115)
+    assert res_base["status"] == "success"
+    summary_base = adapter.get_summary()
+    assert summary_base["high_risk_count"] == 110, f"Expected 110 HIGH_RISK in baseline cascade, got {summary_base['high_risk_count']}"
+    events_base = adapter.get_live_events(limit=115)
+    assert not any(e.get("taint_propagated") is True for e in events_base), "Baseline cascade must never propagate taint"
+
+    print("[PASS] test_burst_taint_pipeline_selection_and_telemetry passed.")
+
+
 class TestDashboardSuite(unittest.TestCase):
     """Unittest test runner discovery wrapper."""
 
@@ -1284,6 +1376,9 @@ class TestDashboardSuite(unittest.TestCase):
     def test_system_status_integrity_hashes_and_models(self):
         test_system_status_integrity_hashes_and_models()
 
+    def test_burst_taint_pipeline_selection_and_telemetry(self):
+        test_burst_taint_pipeline_selection_and_telemetry()
+
 
 if __name__ == "__main__":
     test_adapter_initialization_and_summary()
@@ -1303,4 +1398,5 @@ if __name__ == "__main__":
     test_extended_phase7b_research_results()
     test_all_seven_tab_sections_rendered()
     test_system_status_integrity_hashes_and_models()
+    test_burst_taint_pipeline_selection_and_telemetry()
     print("\nALL DASHBOARD UNIT & INTEGRATION TESTS PASSED SUCCESSFULLY.")

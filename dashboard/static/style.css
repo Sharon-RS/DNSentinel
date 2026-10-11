@@ -367,6 +367,16 @@ body {
   background-color: rgba(139, 92, 246, 0.32);
 }
 
+.btn-taint {
+  background-color: rgba(236, 72, 153, 0.18);
+  border-color: rgba(236, 72, 153, 0.45);
+  color: #f472b6;
+}
+
+.btn-taint:hover {
+  background-color: rgba(236, 72, 153, 0.32);
+}
+
 .btn-danger {
   background-color: var(--color-danger-bg);
   border-color: rgba(239, 68, 68, 0.4);
@@ -430,6 +440,12 @@ body {
   background-color: var(--bg-surface-elevated);
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
+}
+
+.badge-taint {
+  background-color: rgba(236, 72, 153, 0.18);
+  color: #f472b6;
+  border: 1px solid rgba(236, 72, 153, 0.4);
 }
 
 /* ==========================================================================

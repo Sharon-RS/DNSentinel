@@ -38,6 +38,7 @@
     btnReplayTunnel: document.getElementById('btn-replay-tunnel'),
     btnReplayTunnelB: document.getElementById('btn-replay-tunnel-b'),
     btnReplayTunnelCascade: document.getElementById('btn-replay-tunnel-cascade'),
+    btnReplayTunnelTaint: document.getElementById('btn-replay-tunnel-taint'),
     btnTestCustom: document.getElementById('btn-test-custom'),
     customDomainInput: document.getElementById('custom-domain-input'),
     btnExportAlerts: document.getElementById('btn-export-alerts'),
@@ -233,6 +234,13 @@
     if (elements.btnReplayTunnelCascade) {
       elements.btnReplayTunnelCascade.addEventListener('click', () => {
         triggerReplay('tunnel_cascade');
+      });
+    }
+
+    // Replay Tunnel Burst (ML30 + Burst-Taint Propagation)
+    if (elements.btnReplayTunnelTaint) {
+      elements.btnReplayTunnelTaint.addEventListener('click', () => {
+        triggerReplay('tunnel_taint');
       });
     }
 
@@ -549,7 +557,13 @@
       probStr = `${pct.toFixed(1)}%`;
     }
 
-    const pathHtml = hasPath ? `<span class="badge badge-primary font-mono">${escapeHtml(item.cascade_path)}</span>` : '';
+    const isTainted = Boolean(item.taint_propagated) || item.detection_source === 'TAINT_PROPAGATED' || item.cascade_path === 'TAINT_PROPAGATED';
+
+    let pathHtml = '';
+    if (hasPath) {
+      const pathBadgeClass = isTainted ? 'badge-taint' : 'badge-primary';
+      pathHtml = `<span class="badge ${pathBadgeClass} font-mono">${escapeHtml(item.cascade_path)}</span>`;
+    }
 
     let decisionHtml = '';
     if (hasDecision) {
@@ -558,11 +572,17 @@
       decisionHtml = `<span class="badge ${badgeClass} font-mono">${escapeHtml(item.cascade_decision)}</span>`;
     }
 
+    let taintTag = '';
+    if (isTainted) {
+      taintTag = `<span class="badge badge-taint font-mono" title="Propagated via Parent-Domain Burst-Taint">TAINT</span>`;
+    }
+
     const probHtml = `<span class="font-mono text-muted" title="ML Probability">ML: ${escapeHtml(probStr)}</span>`;
 
     return `<div class="detection-method-cell">`
       + (pathHtml ? pathHtml + ' ' : '')
       + (decisionHtml ? decisionHtml + ' ' : '')
+      + (taintTag ? taintTag + ' ' : '')
       + probHtml
       + `</div>`;
   }
@@ -942,6 +962,8 @@
       btn = elements.btnReplayTunnelB;
     } else if (traceType === 'tunnel_cascade') {
       btn = elements.btnReplayTunnelCascade;
+    } else if (traceType === 'tunnel_taint' || traceType === 'tunnel_burst_taint') {
+      btn = elements.btnReplayTunnelTaint;
     } else {
       btn = elements.btnReplayTunnel;
     }

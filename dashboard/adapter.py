@@ -21,7 +21,7 @@ from src.utils.config import Config
 from src.features.traditional_features import TraditionalFeatureExtractor
 from src.pipeline.detection_pipeline import DetectionPipeline
 from src.pipeline.cold_start_pipeline import ColdStartMitigatedPipeline
-from src.pipeline.cascade_pipeline import CascadeDetectionPipeline
+from src.pipeline.cascade_pipeline import CascadeDetectionPipeline, BurstTaintCascadePipeline
 from experiments.context import IsolatedEvaluationContext
 
 
@@ -195,6 +195,8 @@ class DashboardAdapter:
                 ),
                 "cascade_path": result.get("cascade_path"),
                 "cascade_decision": result.get("cascade_decision"),
+                "detection_source": result.get("detection_source", "HEURISTIC"),
+                "taint_propagated": bool(result.get("taint_propagated", False)),
                 "is_replay": is_replay
             }
 
@@ -731,6 +733,12 @@ class DashboardAdapter:
             display_label = "Historical Tunnel Burst Trace (Tiered ML Cascade)"
             replay_mode = "LIVE TIERED CASCADE — ML30"
             pipeline_cls = CascadeDetectionPipeline
+            copy_org_baseline = True
+        elif dataset_name in ("tunnel_taint", "tunnel_burst_taint"):
+            target_file = datasets_dir / "lab_trace_tunnel_burst.jsonl"
+            display_label = "Historical Tunnel Burst Trace (ML30 with Burst Taint)"
+            replay_mode = "EXPERIMENTAL CASCADE — BURST TAINT PROPAGATION"
+            pipeline_cls = BurstTaintCascadePipeline
             copy_org_baseline = True
         elif dataset_name == "benign":
             target_file = datasets_dir / "lab_trace_benign.jsonl"

@@ -12,6 +12,7 @@ Preserves Pipeline B calibration buffer, organization fallback, batch gating,
 and baseline update protection. ML classification is strictly read-only.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import time
@@ -21,9 +22,21 @@ import joblib
 import numpy as np
 
 from src.utils.config import Config
+from src.utils.domain import extract_registrable_domain
 from src.behavior.behavior_snapshot import BehaviorSnapshot
 from src.behavior.deviation_calculator import DeviationCalculator
 from src.pipeline.cold_start_pipeline import ColdStartMitigatedPipeline
+
+
+@dataclass
+class TaintRecord:
+    registrable_domain: str
+    host: str
+    first_detected_ts: float
+    last_detected_ts: float
+    last_query_index: int
+    source_query_index: int
+    source_domain: str
 
 
 class CascadeDetectionPipeline(ColdStartMitigatedPipeline):
@@ -82,6 +95,9 @@ class CascadeDetectionPipeline(ColdStartMitigatedPipeline):
         max_length: Optional[int] = None,
         model_path: Optional[Path] = None,
         enable_ml: bool = True,
+        enable_burst_taint: bool = False,
+        taint_ttl_seconds: float = 60.0,
+        taint_max_query_gap: int = 20,
     ):
         super().__init__(
             data_dir=data_dir,
@@ -93,6 +109,11 @@ class CascadeDetectionPipeline(ColdStartMitigatedPipeline):
 
         self.last_query_timestamps: Dict[str, float] = {}
         self.enable_ml = enable_ml
+        self.enable_burst_taint = enable_burst_taint
+        self.taint_ttl_seconds = taint_ttl_seconds
+        self.taint_max_query_gap = taint_max_query_gap
+        # Host-isolated burst-taint tracking: host -> {registrable_parent_domain: TaintRecord}
+        self.taint_state: Dict[str, Dict[str, TaintRecord]] = {}
 
         # Resolve ML30 model path relative to project root (never hardcoded absolute)
         if model_path is None:
@@ -279,6 +300,14 @@ class CascadeDetectionPipeline(ColdStartMitigatedPipeline):
         inter_arrival_time = max(0.0, current_ts - last_ts) if last_ts is not None else 0.0
         self.last_query_timestamps[host] = current_ts
 
+        # Check active parent-domain burst taint (host-isolated, registrable domain match)
+        parent_domain = extract_registrable_domain(domain)
+        is_tainted, taint_record = (
+            self._check_taint(host, parent_domain, current_ts, k)
+            if self.enable_burst_taint
+            else (False, None)
+        )
+
         # 2. Load CURRENT persistent baselines (queries 1..k-1)
         host_profile = self.host_profile.load(host).to_dict()
         organization_profile = self.organization_profile.load()
@@ -356,11 +385,49 @@ class CascadeDetectionPipeline(ColdStartMitigatedPipeline):
                 cascade_decision = "BENIGN"
                 # Observation cleared by ML; preserved risk_level allows Pipeline B baseline gating
 
+        # 7b. Burst-Taint Propagation Evaluation (if enabled)
+        detection_source = (
+            "DIRECT_FAST_PATH"
+            if cascade_path == "FAST_PATH_MALICIOUS"
+            else (
+                "DIRECT_ML"
+                if cascade_decision == "MALICIOUS"
+                else (
+                    "FAST_PATH_BENIGN"
+                    if cascade_path == "FAST_PATH_BENIGN"
+                    else "DIRECT_CLEAR"
+                )
+            )
+        )
+        taint_propagated = False
+
+        if self.enable_burst_taint:
+            if cascade_decision == "MALICIOUS":
+                # Confirmed attack establishes or refreshes taint for this host and registrable domain
+                self._register_taint(host, parent_domain, current_ts, k, domain)
+            elif is_tainted and taint_record is not None:
+                # Direct evaluation was non-malicious, but active burst-taint exists for this parent domain
+                cascade_decision = "MALICIOUS"
+                risk_result["risk_level"] = "HIGH_RISK"
+                cascade_path = "TAINT_PROPAGATED"
+                detection_source = "TAINT_PROPAGATED"
+                taint_propagated = True
+                risk_result["confidence"] = max(risk_result.get("confidence", 0.85), 0.90)
+                risk_result["recommendation"] = (
+                    "Potential DNS tunneling detected via parent-domain burst-taint propagation. Immediate investigation recommended."
+                )
+                risk_result["taint_parent_domain"] = parent_domain
+                risk_result["taint_inherited_from"] = taint_record.source_query_index
+                risk_result["taint_source_domain"] = taint_record.source_domain
+                self._refresh_taint(host, parent_domain, current_ts, k)
+
         # Attach cascade and cold-start metadata to result
         risk_result["ml_enabled"] = ml_enabled
         risk_result["ml_probability"] = ml_prob
         risk_result["cascade_path"] = cascade_path
         risk_result["cascade_decision"] = cascade_decision
+        risk_result["detection_source"] = detection_source
+        risk_result["taint_propagated"] = taint_propagated
 
         risk_result["query_index"] = k
         risk_result["lifecycle_state"] = lifecycle_state
@@ -448,3 +515,129 @@ class CascadeDetectionPipeline(ColdStartMitigatedPipeline):
                 self.host_profile.update(host, item["domain"], item["features"])
                 self.organization_profile.update(host, item["domain"], item["features"])
             self.provisional_buffers[host] = []
+
+    def reset_taint(self, host: Optional[str] = None):
+        """
+        Resets burst-taint state. If host is specified, resets only that host;
+        otherwise resets all hosts.
+        """
+        if host is not None:
+            self.taint_state.pop(host, None)
+        else:
+            self.taint_state.clear()
+
+    def _check_taint(
+        self,
+        host: str,
+        parent_domain: Optional[str],
+        current_ts: float,
+        current_k: int
+    ) -> Tuple[bool, Optional[TaintRecord]]:
+        """
+        Checks if active, non-expired taint exists for (host, parent_domain).
+        Guarantees:
+        - Host isolation: cannot access taint from other hosts.
+        - Domain isolation: exact match on registrable parent domain.
+        - Expiry by time (taint_ttl_seconds) and query gap (taint_max_query_gap).
+        """
+        if not parent_domain or host not in self.taint_state:
+            return False, None
+
+        host_records = self.taint_state[host]
+        record = host_records.get(parent_domain)
+        if record is None:
+            return False, None
+
+        # Expiry check by timestamp
+        if (current_ts - record.last_detected_ts) > self.taint_ttl_seconds:
+            host_records.pop(parent_domain, None)
+            return False, None
+
+        # Expiry check by query index gap
+        if (current_k - record.last_query_index) > self.taint_max_query_gap:
+            host_records.pop(parent_domain, None)
+            return False, None
+
+        return True, record
+
+    def _register_taint(
+        self,
+        host: str,
+        parent_domain: Optional[str],
+        current_ts: float,
+        current_k: int,
+        source_domain: str
+    ):
+        """
+        Registers or updates active taint after a confirmed malicious decision.
+        """
+        if not parent_domain:
+            return
+
+        host_records = self.taint_state.setdefault(host, {})
+        if parent_domain in host_records:
+            rec = host_records[parent_domain]
+            rec.last_detected_ts = current_ts
+            rec.last_query_index = current_k
+        else:
+            host_records[parent_domain] = TaintRecord(
+                registrable_domain=parent_domain,
+                host=host,
+                first_detected_ts=current_ts,
+                last_detected_ts=current_ts,
+                last_query_index=current_k,
+                source_query_index=current_k,
+                source_domain=source_domain,
+            )
+
+    def _refresh_taint(
+        self,
+        host: str,
+        parent_domain: Optional[str],
+        current_ts: float,
+        current_k: int
+    ):
+        """
+        Extends active taint timer upon taint propagation.
+        """
+        if not parent_domain or host not in self.taint_state:
+            return
+        rec = self.taint_state[host].get(parent_domain)
+        if rec:
+            rec.last_detected_ts = current_ts
+            rec.last_query_index = current_k
+
+
+class BurstTaintCascadePipeline(CascadeDetectionPipeline):
+    """
+    Research prototype extending CascadeDetectionPipeline with parent-domain
+    burst-taint propagation.
+    Propagates suspicion to subsequent queries under the same registrable parent domain
+    from the same host following a confirmed attack.
+    """
+
+    def __init__(
+        self,
+        data_dir=None,
+        calibration_queries: Optional[int] = None,
+        min_org_observations: Optional[int] = None,
+        max_entropy: Optional[float] = None,
+        max_length: Optional[int] = None,
+        model_path: Optional[Path] = None,
+        enable_ml: bool = True,
+        enable_burst_taint: bool = True,
+        taint_ttl_seconds: float = 60.0,
+        taint_max_query_gap: int = 20,
+    ):
+        super().__init__(
+            data_dir=data_dir,
+            calibration_queries=calibration_queries,
+            min_org_observations=min_org_observations,
+            max_entropy=max_entropy,
+            max_length=max_length,
+            model_path=model_path,
+            enable_ml=enable_ml,
+            enable_burst_taint=enable_burst_taint,
+            taint_ttl_seconds=taint_ttl_seconds,
+            taint_max_query_gap=taint_max_query_gap,
+        )

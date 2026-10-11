@@ -175,8 +175,9 @@
                   <th style="width: 90px;" title="Shannon Entropy in bits">Entropy</th>
                   <th style="width: 80px;" title="Total domain length">Domain Length</th>
                   <th style="width: 90px;" title="Sliding window temporal query rate (QPS)">Query Rate</th>
-                  <th style="width: 90px;" title="Composite Behavior Score [0, 100]">Risk Score</th>
-                  <th style="width: 120px;">Risk Level</th>
+                  <th style="width: 90px;" title="Composite Behavior Score [0, 100]. Note: Behavioral score and final cascade risk level are different signals.">Risk Score</th>
+                  <th style="width: 190px;" title="Pipeline evaluation tier. Note: Behavioral score and final cascade risk level are different signals.">Detection Method</th>
+                  <th style="width: 120px;" title="Final evaluated risk level. Note: Behavioral score and final cascade risk level are different signals.">Risk Level</th>
                   <th style="width: 110px;" title="Real-time baseline protection status">Baseline Status</th>
                 </tr>
               </thead>
@@ -190,6 +191,10 @@
               <h4>No Live DNS Telemetry Observed Yet</h4>
               <p>Start DNSentinel capture or click one of the <strong>Workload Replay</strong> buttons above to evaluate traffic traces in real time.</p>
             </div>
+          </div>
+
+          <div class="table-footnote">
+            * Note: Behavioral score (heuristic baseline deviation) and final cascade risk level (which incorporates ML30 classification when escalated) are different signals.
           </div>
         </div>
       </section>
@@ -513,8 +518,9 @@
                   <th style="width: 130px;">Detection Time</th>
                   <th style="width: 120px;">Host IP</th>
                   <th>Flagged Target Domain</th>
-                  <th style="width: 80px;">Risk Score</th>
-                  <th style="width: 110px;">Risk Level</th>
+                  <th style="width: 80px;" title="Composite Behavior Score [0, 100]. Note: Behavioral score and final cascade risk level are different signals.">Risk Score</th>
+                  <th style="width: 190px;" title="Pipeline evaluation tier. Note: Behavioral score and final cascade risk level are different signals.">Detection Method</th>
+                  <th style="width: 110px;" title="Final evaluated risk level. Note: Behavioral score and final cascade risk level are different signals.">Risk Level</th>
                   <th style="width: 80px;">Confidence</th>
                   <th style="width: 130px;">Baseline Guard</th>
                   <th style="width: 160px;">Relevant Behavioral Deviations</th>
@@ -534,7 +540,7 @@
           </div>
 
           <div class="table-footnote">
-            * Note: Recommendations displayed in the UI represent analytical dashboard guidance for human operators, not automated enforcement actions.
+            * Note: Behavioral score and final cascade risk level are different signals. Recommendations displayed in the UI represent analytical dashboard guidance for human operators, not automated enforcement actions.
           </div>
         </div>
       </section>

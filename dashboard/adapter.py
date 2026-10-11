@@ -6,6 +6,7 @@ without modifying production detection logic or mutating live persistent baselin
 
 import csv
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -101,9 +102,35 @@ class DashboardAdapter:
                 "confidence": round(float(result.get("confidence", 0.90)), 2),
                 "recommendation": result.get("recommendation", "No immediate action required."),
                 "baseline_updated": bool(result.get("baseline_updated", False)),
+                "provisional_held": bool(result.get("provisional_held", False) or result.get("lifecycle_state") == "COLD_START_CALIBRATION"),
+                "calibration_quarantined": bool(result.get("calibration_quarantined", False) or result.get("quarantined", False)),
+                "quarantined": bool(result.get("calibration_quarantined", False) or result.get("quarantined", False)),
+                "baseline_status": str(result["baseline_status"]) if result.get("baseline_status") else (
+                    "Learned" if bool(result.get("baseline_updated", False)) else (
+                        "Quarantined" if bool(result.get("calibration_quarantined", False) or result.get("quarantined", False)) else (
+                            "Calibrating" if bool(result.get("provisional_held", False) or result.get("lifecycle_state") == "COLD_START_CALIBRATION") else "Not Updated"
+                        )
+                    )
+                ),
                 # Tiered Cascade ML telemetry
                 "ml_enabled": bool(result.get("ml_enabled", False)),
-                "ml_probability": round(float(result["ml_probability"]), 4) if result.get("ml_probability") is not None else None,
+                "ml_probability": (
+                    round(float(result["ml_probability"]), 4)
+                    if (
+                        result.get("ml_probability") is not None
+                        and isinstance(result.get("ml_probability"), (int, float))
+                        and math.isfinite(float(result["ml_probability"]))
+                    )
+                    else (
+                        round(float(result["ml_probability"]), 4)
+                        if (
+                            result.get("ml_probability") is not None
+                            and isinstance(result.get("ml_probability"), str)
+                            and result.get("ml_probability").replace(".", "", 1).isdigit()
+                        )
+                        else None
+                    )
+                ),
                 "cascade_path": result.get("cascade_path"),
                 "cascade_decision": result.get("cascade_decision"),
                 "is_replay": is_replay
@@ -741,8 +768,15 @@ class DashboardAdapter:
         features = self.extractor.extract(dummy_event)
         features["timestamp"] = time.time()
 
+        org_baseline_file = Config.PROJECT_ROOT / "experiments" / "datasets" / "enterprise_org_baseline.json"
+
         # Run inside isolated context to prevent live baseline drift from test queries
         with IsolatedEvaluationContext() as ctx:
+            if org_baseline_file.exists():
+                dst = ctx.sandbox_path / "organization" / "organization.json"
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(org_baseline_file, dst)
+
             if self.pipeline_mode == "cascade":
                 pipeline = CascadeDetectionPipeline(data_dir=ctx.sandbox_path)
                 mode_str = "LIVE TIERED CASCADE — ML30"

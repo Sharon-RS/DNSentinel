@@ -493,6 +493,64 @@
   // Section 1: Live Monitor Rendering
   // ========================================================================
 
+  function formatBaselineStatus(ev) {
+    const status = ev.baseline_status || (
+      ev.baseline_updated ? 'Learned' :
+      (ev.quarantined || ev.calibration_quarantined) ? 'Quarantined' :
+      (ev.provisional_held || ev.lifecycle_state === 'COLD_START_CALIBRATION') ? 'Calibrating' :
+      'Not Updated'
+    );
+
+    switch (status) {
+      case 'Learned':
+        return '<span class="text-success font-mono" title="Committed: Baseline profile updated">Learned</span>';
+      case 'Calibrating':
+        return '<span class="text-warning font-mono" title="Provisional: Buffered awaiting calibration">Calibrating</span>';
+      case 'Quarantined':
+        return '<span class="text-danger font-mono" title="Guarded: Host explicitly quarantined">Quarantined</span>';
+      case 'Not Updated':
+      default:
+        return '<span class="text-muted font-mono" title="Guarded: Baseline not updated">Not Updated</span>';
+    }
+  }
+
+  function formatDetectionMethod(item) {
+    if (!item) {
+      return '<span class="text-muted font-mono">Heuristic only</span>';
+    }
+
+    const hasPath = item.cascade_path !== null && item.cascade_path !== undefined && String(item.cascade_path).trim() !== '';
+    const hasDecision = item.cascade_decision !== null && item.cascade_decision !== undefined && String(item.cascade_decision).trim() !== '';
+
+    if (!hasPath && !hasDecision) {
+      return '<span class="text-muted font-mono">Heuristic only</span>';
+    }
+
+    let probStr = 'N/A';
+    if (typeof item.ml_probability === 'number' && Number.isFinite(item.ml_probability)) {
+      const num = item.ml_probability;
+      const pct = num <= 1.0 && num >= 0.0 ? num * 100 : num;
+      probStr = `${pct.toFixed(1)}%`;
+    }
+
+    const pathHtml = hasPath ? `<span class="badge badge-primary font-mono">${escapeHtml(item.cascade_path)}</span>` : '';
+
+    let decisionHtml = '';
+    if (hasDecision) {
+      const dec = String(item.cascade_decision).toUpperCase();
+      const badgeClass = dec === 'MALICIOUS' ? 'badge-high' : (dec === 'BENIGN' ? 'badge-normal' : 'badge-secondary');
+      decisionHtml = `<span class="badge ${badgeClass} font-mono">${escapeHtml(item.cascade_decision)}</span>`;
+    }
+
+    const probHtml = `<span class="font-mono text-muted" title="ML Probability">ML: ${escapeHtml(probStr)}</span>`;
+
+    return `<div class="detection-method-cell">`
+      + (pathHtml ? pathHtml + ' ' : '')
+      + (decisionHtml ? decisionHtml + ' ' : '')
+      + probHtml
+      + `</div>`;
+  }
+
   function renderLiveEventsTable(events) {
     let filtered = events;
     if (state.riskFilter !== 'ALL') {
@@ -516,9 +574,8 @@
 
     filtered.forEach((ev, idx) => {
       const riskClass = getRiskBadgeClass(ev.risk_level);
-      const baselineAction = ev.baseline_updated
-        ? '<span class="text-success font-mono">Learned</span>'
-        : '<span class="text-danger font-mono" title="Guarded: Baseline not modified">Quarantined</span>';
+      const baselineAction = formatBaselineStatus(ev);
+      const detectionMethodHtml = formatDetectionMethod(ev);
 
       rowsHtml += `
         <tr class="event-row" data-id="${ev.id}" style="cursor: pointer;">
@@ -526,11 +583,12 @@
           <td class="font-mono"><strong>${escapeHtml(ev.host)}</strong></td>
           <td class="font-mono" title="${escapeHtml(ev.domain)}">${escapeHtml(truncate(ev.domain, 45))}</td>
           <td class="font-mono">${escapeHtml(ev.query_type_name)}</td>
-          <td class="font-mono">${ev.entropy.toFixed(4)}</td>
-          <td class="font-mono">${ev.domain_length}</td>
-          <td class="font-mono">${ev.query_rate.toFixed(2)}</td>
-          <td class="font-mono"><strong>${ev.behavior_score.toFixed(1)}</strong></td>
-          <td><span class="badge ${riskClass}">${ev.risk_level}</span></td>
+          <td class="font-mono">${formatNumber(ev.entropy, 4, '0.0000')}</td>
+          <td class="font-mono">${ev.domain_length != null && Number.isFinite(Number(ev.domain_length)) ? Number(ev.domain_length) : 0}</td>
+          <td class="font-mono">${formatNumber(ev.query_rate, 2, '0.00')}</td>
+          <td class="font-mono"><strong>${formatNumber(ev.behavior_score, 1, '0.0')}</strong></td>
+          <td>${detectionMethodHtml}</td>
+          <td><span class="badge ${riskClass}">${escapeHtml(ev.risk_level)}</span></td>
           <td>${baselineAction}</td>
         </tr>
       `;
@@ -565,19 +623,20 @@
     if (elements.behaviorMetaHost) elements.behaviorMetaHost.textContent = ev.host;
     if (elements.behaviorMetaDomain) elements.behaviorMetaDomain.textContent = truncate(ev.domain, 40);
     if (elements.behaviorMetaScore) {
-      elements.behaviorMetaScore.textContent = ev.behavior_score.toFixed(1);
-      elements.behaviorMetaScore.className = ev.behavior_score >= 70 ? 'meta-val font-mono font-bold text-danger' :
-                                            ev.behavior_score >= 50 ? 'meta-val font-mono font-bold text-warning' :
+      const score = Number.isFinite(Number(ev.behavior_score)) ? Number(ev.behavior_score) : 0.0;
+      elements.behaviorMetaScore.textContent = score.toFixed(1);
+      elements.behaviorMetaScore.className = score >= 70 ? 'meta-val font-mono font-bold text-danger' :
+                                            score >= 50 ? 'meta-val font-mono font-bold text-warning' :
                                             'meta-val font-mono font-bold text-success';
     }
-    if (elements.behaviorMetaConf) elements.behaviorMetaConf.textContent = `${(ev.confidence * 100).toFixed(0)}%`;
+    if (elements.behaviorMetaConf) elements.behaviorMetaConf.textContent = formatPercent(ev.confidence, 0, 'N/A');
 
     // 5-Tier deviation values supplied by backend
-    const pEntropy = Math.min(100, (ev.entropy_deviation * 100));
-    const pLength = Math.min(100, (ev.domain_length_deviation * 100));
-    const pRate = Math.min(100, (ev.query_rate_deviation * 100));
-    const pNovel = Math.min(100, (ev.novel_domain_score * 100));
-    const pOrg = Math.min(100, (ev.organization_rarity_score * 100));
+    const pEntropy = Math.min(100, ((Number(ev.entropy_deviation) || 0) * 100));
+    const pLength = Math.min(100, ((Number(ev.domain_length_deviation) || 0) * 100));
+    const pRate = Math.min(100, ((Number(ev.query_rate_deviation) || 0) * 100));
+    const pNovel = Math.min(100, ((Number(ev.novel_domain_score) || 0) * 100));
+    const pOrg = Math.min(100, ((Number(ev.organization_rarity_score) || 0) * 100));
 
     if (elements.tierBarEntropy) elements.tierBarEntropy.style.width = `${pEntropy}%`;
     if (elements.tierBarLength) elements.tierBarLength.style.width = `${pLength}%`;
@@ -585,18 +644,19 @@
     if (elements.tierBarNovel) elements.tierBarNovel.style.width = `${pNovel}%`;
     if (elements.tierBarOrg) elements.tierBarOrg.style.width = `${pOrg}%`;
 
-    if (elements.tierValEntropy) elements.tierValEntropy.textContent = `Deviation: ${ev.entropy_deviation.toFixed(4)} | Raw Entropy: ${ev.entropy.toFixed(4)} bits`;
-    if (elements.tierValLength) elements.tierValLength.textContent = `Deviation: ${ev.domain_length_deviation.toFixed(4)} | Raw Length: ${ev.domain_length} chars`;
-    if (elements.tierValRate) elements.tierValRate.textContent = `Deviation: ${ev.query_rate_deviation.toFixed(4)} | Observed Rate: ${ev.query_rate.toFixed(2)} QPS`;
-    if (elements.tierValNovel) elements.tierValNovel.textContent = `Deviation: ${ev.novel_domain_score.toFixed(4)} | Host Novelty Metric`;
-    if (elements.tierValOrg) elements.tierValOrg.textContent = `Deviation: ${ev.organization_rarity_score.toFixed(4)} | Enterprise Inverse Rarity Metric`;
+    if (elements.tierValEntropy) elements.tierValEntropy.textContent = `Deviation: ${formatNumber(ev.entropy_deviation, 4, '0.0000')} | Raw Entropy: ${formatNumber(ev.entropy, 4, '0.0000')} bits`;
+    if (elements.tierValLength) elements.tierValLength.textContent = `Deviation: ${formatNumber(ev.domain_length_deviation, 4, '0.0000')} | Raw Length: ${ev.domain_length != null ? ev.domain_length : 0} chars`;
+    if (elements.tierValRate) elements.tierValRate.textContent = `Deviation: ${formatNumber(ev.query_rate_deviation, 4, '0.0000')} | Observed Rate: ${formatNumber(ev.query_rate, 2, '0.00')} QPS`;
+    if (elements.tierValNovel) elements.tierValNovel.textContent = `Deviation: ${formatNumber(ev.novel_domain_score, 4, '0.0000')} | Host Novelty Metric`;
+    if (elements.tierValOrg) elements.tierValOrg.textContent = `Deviation: ${formatNumber(ev.organization_rarity_score, 4, '0.0000')} | Enterprise Inverse Rarity Metric`;
 
     // Sliding window QPS box
     if (elements.swRateVal) {
-      elements.swRateVal.textContent = `${ev.query_rate.toFixed(2)} QPS`;
+      elements.swRateVal.textContent = `${formatNumber(ev.query_rate, 2, '0.00')} QPS`;
     }
     if (elements.swBurstStatus) {
-      if (ev.query_rate > 2.0) {
+      const qrate = Number(ev.query_rate) || 0;
+      if (qrate > 2.0) {
         elements.swBurstStatus.innerHTML = '<span class="pill-dot" style="background-color: #f59e0b;"></span> <span style="color: #f59e0b;">Burst Rate Exceeds 2.0 QPS Baseline</span>';
       } else {
         elements.swBurstStatus.innerHTML = '<span class="pill-dot"></span> <span>Normal Temporal Traffic Pace (&le; 2.0 QPS)</span>';
@@ -746,18 +806,20 @@
 
     filtered.forEach(al => {
       const riskClass = getRiskBadgeClass(al.risk_level);
-      const devSummary = `H: ${(al.entropy || 0).toFixed(2)}, L: ${al.domain_length || 0}, R: ${(al.query_rate || 0).toFixed(1)}`;
+      const devSummary = `H: ${formatNumber(al.entropy, 2, '0.00')}, L: ${al.domain_length != null && Number.isFinite(Number(al.domain_length)) ? Number(al.domain_length) : 0}, R: ${formatNumber(al.query_rate, 1, '0.0')}`;
+      const detectionMethodHtml = formatDetectionMethod(al);
 
       rowsHtml += `
         <tr class="alert-row" data-id="${al.id}" style="cursor: pointer;">
           <td class="font-mono">${formatTimestamp(al.timestamp)}</td>
           <td class="font-mono"><strong>${escapeHtml(al.host)}</strong></td>
           <td class="font-mono" style="color: #fca5a5;"><strong>${escapeHtml(truncate(al.domain, 35))}</strong></td>
-          <td class="font-mono"><strong class="text-danger">${al.behavior_score.toFixed(1)}</strong></td>
-          <td><span class="badge ${riskClass}">${al.risk_level}</span></td>
-          <td class="font-mono">${(al.confidence * 100).toFixed(0)}%</td>
+          <td class="font-mono"><strong class="text-danger">${formatNumber(al.behavior_score, 1, '0.0')}</strong></td>
+          <td>${detectionMethodHtml}</td>
+          <td><span class="badge ${riskClass}">${escapeHtml(al.risk_level)}</span></td>
+          <td class="font-mono">${formatPercent(al.confidence, 0, 'N/A')}</td>
           <td><span class="badge badge-normal">Quarantined (0 Drift)</span></td>
-          <td class="font-mono" style="font-size: 0.76rem; color: #a5f3fc;">${devSummary}</td>
+          <td class="font-mono" style="font-size: 0.76rem; color: #a5f3fc;">${escapeHtml(devSummary)}</td>
           <td style="font-size: 0.78rem; color: #cbd5e1;"><em>Analyst Guidance:</em> ${escapeHtml(al.recommendation)}</td>
         </tr>
       `;
@@ -927,15 +989,16 @@
         csvContent += 'Timestamp,Host,Domain,Score,Risk_Level,Confidence,Baseline_Protected,Recommendation\r\n';
 
         alerts.forEach(a => {
+          const recText = a.recommendation ? String(a.recommendation).replace(/"/g, '""') : '';
           const row = [
-            `"${a.timestamp}"`,
-            `"${a.host}"`,
-            `"${a.domain}"`,
-            a.behavior_score,
-            `"${a.risk_level}"`,
-            a.confidence,
+            `"${a.timestamp || ''}"`,
+            `"${a.host || ''}"`,
+            `"${a.domain || ''}"`,
+            a.behavior_score != null ? a.behavior_score : 0,
+            `"${a.risk_level || 'NORMAL'}"`,
+            a.confidence != null ? a.confidence : 0,
             !a.baseline_updated,
-            `"${a.recommendation.replace(/"/g, '""')}"`
+            `"${recText}"`
           ].join(',');
           csvContent += row + '\r\n';
         });
@@ -994,9 +1057,24 @@
     return str.length > maxLen ? str.slice(0, maxLen) + '...' : str;
   }
 
+  function formatNumber(val, decimals = 1, fallback = '0.0') {
+    if (val === null || val === undefined) return fallback;
+    const num = Number(val);
+    if (!Number.isFinite(num)) return fallback;
+    return num.toFixed(decimals);
+  }
+
+  function formatPercent(val, decimals = 0, fallback = 'N/A') {
+    if (val === null || val === undefined) return fallback;
+    const num = Number(val);
+    if (!Number.isFinite(num)) return fallback;
+    const pct = num <= 1.0 && num >= 0.0 ? num * 100 : num;
+    return `${pct.toFixed(decimals)}%`;
+  }
+
   function escapeHtml(str) {
-    if (typeof str !== 'string') return str;
-    return str
+    if (str === null || str === undefined) return '';
+    return String(str)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')

@@ -571,6 +571,15 @@ body {
 .text-success { color: var(--color-normal); }
 .text-danger { color: var(--color-danger); }
 .text-warning { color: var(--color-suspicious); }
+.text-muted { color: var(--text-muted); }
+.text-cyan { color: var(--accent-cyan); }
+
+.detection-method-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
 
 .table-footnote {
   font-size: 0.78rem;

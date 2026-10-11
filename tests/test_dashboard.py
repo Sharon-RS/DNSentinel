@@ -93,6 +93,259 @@ def test_adapter_ingestion_and_alerts():
     print("[PASS] test_adapter_ingestion_and_alerts passed.")
 
 
+def test_baseline_status_metadata_distinction():
+    """
+    Verify explicit baseline status metadata distinguishing:
+    1. Learned: baseline was updated.
+    2. Calibrating: observation is provisionally buffered and awaiting calibration.
+    3. Quarantined: the host was explicitly quarantined by the pipeline.
+    4. Not Updated: baseline was not updated (including NORMAL, SUSPICIOUS, HIGH_RISK).
+    """
+    adapter = DashboardAdapter()
+
+    # 1. Learned: baseline was updated
+    ev1 = {"source_ip": "10.0.0.1", "domain": "google.com", "query_type": 1}
+    feat1 = {"entropy": 2.5, "domain_length": 10}
+    res1 = {"behavior_score": 0.0, "risk_level": "NORMAL", "baseline_updated": True}
+    rec1 = adapter.ingest_processed_event(ev1, feat1, res1)
+    assert rec1["baseline_status"] == "Learned"
+    assert rec1["baseline_updated"] is True
+    assert rec1["provisional_held"] is False
+    assert rec1["quarantined"] is False
+
+    # 2. Calibrating: observation is provisionally buffered awaiting calibration
+    ev2 = {"source_ip": "10.0.0.5", "domain": "newhost.org", "query_type": 1}
+    feat2 = {"entropy": 2.8, "domain_length": 11}
+    res2 = {
+        "behavior_score": 5.0,
+        "risk_level": "NORMAL",
+        "baseline_updated": False,
+        "provisional_held": True,
+        "lifecycle_state": "COLD_START_CALIBRATION"
+    }
+    rec2 = adapter.ingest_processed_event(ev2, feat2, res2)
+    assert rec2["baseline_status"] == "Calibrating"
+    assert rec2["baseline_updated"] is False
+    assert rec2["provisional_held"] is True
+    assert rec2["quarantined"] is False
+
+    # 3. Quarantined: host was explicitly quarantined
+    ev3 = {"source_ip": "10.0.0.9", "domain": "victim.org", "query_type": 1}
+    feat3 = {"entropy": 3.0, "domain_length": 10}
+    res3 = {
+        "behavior_score": 10.0,
+        "risk_level": "NORMAL",
+        "baseline_updated": False,
+        "calibration_quarantined": True,
+        "lifecycle_state": "STEADY_STATE"
+    }
+    rec3 = adapter.ingest_processed_event(ev3, feat3, res3)
+    assert rec3["baseline_status"] == "Quarantined"
+    assert rec3["baseline_updated"] is False
+    assert rec3["quarantined"] is True
+    assert rec3["calibration_quarantined"] is True
+
+    # 4. Not Updated: baseline was not updated, but host is NOT quarantined
+    # 4a. NORMAL query whose baseline was not updated
+    ev4_norm = {"source_ip": "10.0.0.1", "domain": "normal-uncommitted.org", "query_type": 1}
+    feat4_norm = {"entropy": 2.6, "domain_length": 22}
+    res4_norm = {
+        "behavior_score": 12.0,
+        "risk_level": "NORMAL",
+        "baseline_updated": False,
+        "provisional_held": False,
+        "calibration_quarantined": False
+    }
+    rec4_norm = adapter.ingest_processed_event(ev4_norm, feat4_norm, res4_norm)
+    assert rec4_norm["baseline_status"] == "Not Updated"
+    assert rec4_norm["risk_level"] == "NORMAL"
+    assert rec4_norm["baseline_updated"] is False
+    assert rec4_norm["provisional_held"] is False
+    assert rec4_norm["quarantined"] is False
+
+    # 4b. SUSPICIOUS query whose baseline was not updated
+    ev4_susp = {"source_ip": "10.0.0.1", "domain": "suspicious-domain.org", "query_type": 1}
+    feat4_susp = {"entropy": 4.5, "domain_length": 30}
+    res4_susp = {
+        "behavior_score": 55.0,
+        "risk_level": "SUSPICIOUS",
+        "baseline_updated": False
+    }
+    rec4_susp = adapter.ingest_processed_event(ev4_susp, feat4_susp, res4_susp)
+    assert rec4_susp["baseline_status"] == "Not Updated"
+    assert rec4_susp["baseline_updated"] is False
+
+    # 4c. HIGH_RISK query whose baseline was not updated
+    ev4_high = {"source_ip": "10.0.0.1", "domain": "exfiltration.evil.com", "query_type": 1}
+    feat4_high = {"entropy": 5.1, "domain_length": 45}
+    res4_high = {
+        "behavior_score": 75.0,
+        "risk_level": "HIGH_RISK",
+        "baseline_updated": False
+    }
+    rec4_high = adapter.ingest_processed_event(ev4_high, feat4_high, res4_high)
+    assert rec4_high["baseline_status"] == "Not Updated"
+    assert rec4_high["baseline_updated"] is False
+
+    # 5. Direct explicit override test
+    res5 = {"baseline_updated": False, "baseline_status": "Calibrating"}
+    rec5 = adapter.ingest_processed_event(ev2, feat2, res5)
+    assert rec5["baseline_status"] == "Calibrating"
+
+    # 6. Verify app.js distinguishes all 4 statuses
+    app_js_path = Config.PROJECT_ROOT / "dashboard" / "static" / "app.js"
+    assert app_js_path.exists()
+    app_js_content = app_js_path.read_text(encoding="utf-8")
+    assert "Learned" in app_js_content
+    assert "Calibrating" in app_js_content
+    assert "Quarantined" in app_js_content
+    assert "Not Updated" in app_js_content
+
+    print("[PASS] test_baseline_status_metadata_distinction passed.")
+
+
+def test_detection_method_telemetry_and_ui_distinction():
+    """
+    Verify Detection Method column and cascade telemetry distinction:
+    1. ML-escalated malicious records (cascade_path="ML_ESCALATED", cascade_decision="MALICIOUS", ml_probability finite).
+    2. Fast-path records with no ML probability (cascade_path="FAST_PATH_BENIGN", cascade_decision="BENIGN", ml_probability=None).
+    3. Records without cascade metadata (Heuristic only, ml_probability=None).
+    4. Missing or invalid probabilities (string, nan, inf, None safely handled without errors).
+    5. HTML table headers for Live Monitor and Alert View contain 'Detection Method' and distinction tooltips/footnotes.
+    6. JavaScript app.js contains formatDetectionMethod, 'Heuristic only', 'N/A', and safe formatting.
+    """
+    adapter = DashboardAdapter()
+
+    # 1. ML-escalated malicious record
+    ev1 = {"source_ip": "10.0.0.1", "domain": "exfiltrate.tunnel.attacker.lab", "query_type": 1}
+    feat1 = {"entropy": 4.8, "domain_length": 35, "query_rate": 1.2}
+    res1 = {
+        "behavior_score": 45.3,
+        "risk_level": "HIGH_RISK",
+        "confidence": 0.88,
+        "baseline_updated": False,
+        "ml_enabled": True,
+        "cascade_path": "ML_ESCALATED",
+        "cascade_decision": "MALICIOUS",
+        "ml_probability": 0.3748
+    }
+    rec1 = adapter.ingest_processed_event(ev1, feat1, res1)
+    assert rec1["cascade_path"] == "ML_ESCALATED"
+    assert rec1["cascade_decision"] == "MALICIOUS"
+    assert rec1["ml_probability"] == 0.3748
+    assert rec1["ml_enabled"] is True
+    assert rec1["behavior_score"] == 45.3
+    assert rec1["risk_level"] == "HIGH_RISK"
+    # Alerts buffer should also capture this HIGH_RISK record
+    alerts = adapter.get_alerts()
+    assert len(alerts) >= 1
+    assert alerts[-1]["cascade_path"] == "ML_ESCALATED"
+    assert alerts[-1]["cascade_decision"] == "MALICIOUS"
+    assert alerts[-1]["ml_probability"] == 0.3748
+
+    # 2. Fast-path record with no ML probability
+    ev2 = {"source_ip": "10.0.0.2", "domain": "legit.example.org", "query_type": 1}
+    feat2 = {"entropy": 2.2, "domain_length": 12, "query_rate": 0.5}
+    res2 = {
+        "behavior_score": 8.5,
+        "risk_level": "NORMAL",
+        "confidence": 0.95,
+        "baseline_updated": True,
+        "ml_enabled": True,
+        "cascade_path": "FAST_PATH_BENIGN",
+        "cascade_decision": "BENIGN",
+        "ml_probability": None
+    }
+    rec2 = adapter.ingest_processed_event(ev2, feat2, res2)
+    assert rec2["cascade_path"] == "FAST_PATH_BENIGN"
+    assert rec2["cascade_decision"] == "BENIGN"
+    assert rec2["ml_probability"] is None
+    assert rec2["ml_enabled"] is True
+
+    # 3. Record without cascade metadata (Heuristic only)
+    ev3 = {"source_ip": "10.0.0.3", "domain": "local.internal.corp", "query_type": 1}
+    feat3 = {"entropy": 2.5, "domain_length": 15, "query_rate": 0.1}
+    res3 = {
+        "behavior_score": 5.0,
+        "risk_level": "NORMAL",
+        "confidence": 0.90,
+        "baseline_updated": True
+    }
+    rec3 = adapter.ingest_processed_event(ev3, feat3, res3)
+    assert rec3["cascade_path"] is None
+    assert rec3["cascade_decision"] is None
+    assert rec3["ml_probability"] is None
+    assert rec3["ml_enabled"] is False
+
+    # 4. Missing or invalid probabilities
+    # 4a. String non-numeric probability
+    ev4a = {"source_ip": "10.0.0.4", "domain": "invalid-prob.tunnel.lab", "query_type": 1}
+    feat4a = {"entropy": 4.1, "domain_length": 25, "query_rate": 1.0}
+    res4a = {
+        "behavior_score": 55.0,
+        "risk_level": "SUSPICIOUS",
+        "cascade_path": "ML_ESCALATED",
+        "cascade_decision": "MALICIOUS",
+        "ml_probability": "not-a-number"
+    }
+    rec4a = adapter.ingest_processed_event(ev4a, feat4a, res4a)
+    assert rec4a["cascade_path"] == "ML_ESCALATED"
+    assert rec4a["cascade_decision"] == "MALICIOUS"
+    assert rec4a["ml_probability"] is None
+
+    # 4b. NaN / Inf probability
+    res4b = {
+        "behavior_score": 60.0,
+        "risk_level": "SUSPICIOUS",
+        "cascade_path": "ML_ESCALATED",
+        "cascade_decision": "MALICIOUS",
+        "ml_probability": float("nan")
+    }
+    rec4b = adapter.ingest_processed_event(ev4a, feat4a, res4b)
+    assert rec4b["ml_probability"] is None
+
+    res4c = {
+        "behavior_score": 60.0,
+        "risk_level": "SUSPICIOUS",
+        "cascade_path": "ML_ESCALATED",
+        "cascade_decision": "MALICIOUS",
+        "ml_probability": float("inf")
+    }
+    rec4c = adapter.ingest_processed_event(ev4a, feat4a, res4c)
+    assert rec4c["ml_probability"] is None
+
+    # 5. Verify index.html contains Detection Method column headers and distinction tooltips/footnotes
+    html_path = Config.PROJECT_ROOT / "dashboard" / "static" / "index.html"
+    assert html_path.exists()
+    html_content = html_path.read_text(encoding="utf-8")
+    assert "Detection Method" in html_content
+    # Check both table headers
+    assert "table-live-events" in html_content
+    assert "table-alerts" in html_content
+    # Check explanatory note on behavioral score and cascade risk level being different signals
+    assert "Behavioral score and final cascade risk level are different signals" in html_content
+
+    # 6. Verify app.js contains formatDetectionMethod, 'Heuristic only', 'N/A', and safe formatters
+    app_js_path = Config.PROJECT_ROOT / "dashboard" / "static" / "app.js"
+    assert app_js_path.exists()
+    app_js = app_js_path.read_text(encoding="utf-8")
+    assert "formatDetectionMethod" in app_js
+    assert "Heuristic only" in app_js
+    assert "N/A" in app_js
+    assert "formatNumber" in app_js
+    assert "formatPercent" in app_js
+    assert "escapeHtml" in app_js
+    assert "detection-method-cell" in app_js
+
+    # 7. Verify CSS contains detection-method-cell class
+    css_path = Config.PROJECT_ROOT / "dashboard" / "static" / "style.css"
+    assert css_path.exists()
+    css_content = css_path.read_text(encoding="utf-8")
+    assert ".detection-method-cell" in css_content
+
+    print("[PASS] test_detection_method_telemetry_and_ui_distinction passed.")
+
+
 def test_host_and_organization_baselines_loading():
     """Verify reading host profiles and enterprise organization profile from disk."""
     adapter = DashboardAdapter()
@@ -211,6 +464,70 @@ def test_demo_replay_and_live_data_immutability():
     assert pre_results_hashes == post_results_hashes, "experiments/results/ was modified during demo replay!"
 
     print("[PASS] test_demo_replay_and_live_data_immutability passed (both modes verified, 100% bitwise immutable).")
+
+
+def test_process_test_query_enterprise_baseline_loading_and_isolation():
+    """
+    Verify that process_test_query loads the enterprise organization baseline into
+    the isolated sandbox, evaluates cold hosts against enterprise priors, and leaves
+    production baselines (data/organization, data/profiles) 100% bitwise immutable.
+    """
+    live_profiles_dir = Config.PROJECT_ROOT / "data" / "profiles"
+    live_org_dir = Config.PROJECT_ROOT / "data" / "organization"
+    experiments_results_dir = Config.PROJECT_ROOT / "experiments" / "results"
+
+    pre_profiles_hashes = compute_dir_hashes(live_profiles_dir)
+    pre_org_hashes = compute_dir_hashes(live_org_dir)
+    pre_results_hashes = compute_dir_hashes(experiments_results_dir)
+
+    adapter = DashboardAdapter()
+
+    # 1. Heuristic mode (Pipeline B) with novel tunneling domain on a cold-start host
+    adapter.set_pipeline_mode("heuristic")
+    rep_novel = adapter.process_test_query("10.88.88.88", "exfiltrate.tunnel.attacker.lab", 1)
+    assert rep_novel["status"] == "success"
+    assert rep_novel["mode"] == "LIVE HEURISTIC — PIPELINE B"
+    rec_novel = rep_novel["record"]
+
+    # Verify enterprise organization baseline was loaded:
+    # Novel domain on cold-start host falls back to enterprise mature prior
+    assert rec_novel["organization_rarity_score"] == 1.0, f"Expected rarity 1.0, got {rec_novel['organization_rarity_score']}"
+    assert rec_novel["domain_length_deviation"] > 0.0, f"Expected domain length deviation > 0, got {rec_novel['domain_length_deviation']}"
+    assert rec_novel["entropy_deviation"] > 0.0, f"Expected entropy deviation > 0, got {rec_novel['entropy_deviation']}"
+    assert rec_novel["behavior_score"] > 30.0, f"Expected behavior score > 30, got {rec_novel['behavior_score']}"
+    assert rec_novel["provisional_held"] is True
+    assert rec_novel["baseline_status"] == "Calibrating"
+
+    # 2. Heuristic mode with enterprise-known benign domain (google.com) on a cold-start host
+    rep_benign = adapter.process_test_query("10.88.88.88", "google.com", 1)
+    rec_benign = rep_benign["record"]
+    assert rec_benign["organization_rarity_score"] == 0.0, f"Expected rarity 0.0, got {rec_benign['organization_rarity_score']}"
+    assert rec_benign["behavior_score"] < 15.0, f"Expected benign behavior score < 15, got {rec_benign['behavior_score']}"
+
+    # 3. Cascade mode (Pipeline ML30) with novel tunneling domain on a cold-start host
+    adapter.set_pipeline_mode("cascade")
+    rep_cascade = adapter.process_test_query("10.88.88.88", "exfiltrate.tunnel.attacker.lab", 1)
+    assert rep_cascade["status"] == "success"
+    assert rep_cascade["mode"] == "LIVE TIERED CASCADE — ML30"
+    rec_cascade = rep_cascade["record"]
+    assert rec_cascade["ml_enabled"] is True
+    assert rec_cascade["organization_rarity_score"] == 1.0
+    assert rec_cascade["cascade_path"] == "ML_ESCALATED"
+    assert rec_cascade["risk_level"] in ("HIGH_RISK", "SUSPICIOUS")
+
+    # Restore default pipeline mode
+    adapter.set_pipeline_mode("heuristic")
+
+    # 4. Assert 100% cryptographic immutability of live data directories
+    post_profiles_hashes = compute_dir_hashes(live_profiles_dir)
+    post_org_hashes = compute_dir_hashes(live_org_dir)
+    post_results_hashes = compute_dir_hashes(experiments_results_dir)
+
+    assert pre_profiles_hashes == post_profiles_hashes, "Live data/profiles/ was modified by process_test_query!"
+    assert pre_org_hashes == post_org_hashes, "Live data/organization/ was modified by process_test_query!"
+    assert pre_results_hashes == post_results_hashes, "experiments/results/ was modified by process_test_query!"
+
+    print("[PASS] test_process_test_query_enterprise_baseline_loading_and_isolation passed.")
 
 
 def test_http_api_endpoints():
@@ -526,6 +843,12 @@ class TestDashboardSuite(unittest.TestCase):
     def test_adapter_ingestion_and_alerts(self):
         test_adapter_ingestion_and_alerts()
 
+    def test_baseline_status_metadata_distinction(self):
+        test_baseline_status_metadata_distinction()
+
+    def test_detection_method_telemetry_and_ui_distinction(self):
+        test_detection_method_telemetry_and_ui_distinction()
+
     def test_host_and_organization_baselines_loading(self):
         test_host_and_organization_baselines_loading()
 
@@ -534,6 +857,9 @@ class TestDashboardSuite(unittest.TestCase):
 
     def test_demo_replay_and_live_data_immutability(self):
         test_demo_replay_and_live_data_immutability()
+
+    def test_process_test_query_enterprise_baseline_loading_and_isolation(self):
+        test_process_test_query_enterprise_baseline_loading_and_isolation()
 
     def test_http_api_endpoints(self):
         test_http_api_endpoints()
@@ -557,9 +883,12 @@ class TestDashboardSuite(unittest.TestCase):
 if __name__ == "__main__":
     test_adapter_initialization_and_summary()
     test_adapter_ingestion_and_alerts()
+    test_baseline_status_metadata_distinction()
+    test_detection_method_telemetry_and_ui_distinction()
     test_host_and_organization_baselines_loading()
     test_phase4_research_data_integrity()
     test_demo_replay_and_live_data_immutability()
+    test_process_test_query_enterprise_baseline_loading_and_isolation()
     test_http_api_endpoints()
     test_log_message_safe_handling()
     test_figure_static_endpoint_and_traversal_protection()

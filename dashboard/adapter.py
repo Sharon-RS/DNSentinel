@@ -15,7 +15,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 from src.utils.config import Config
 from src.features.traditional_features import TraditionalFeatureExtractor
@@ -23,6 +23,68 @@ from src.pipeline.detection_pipeline import DetectionPipeline
 from src.pipeline.cold_start_pipeline import ColdStartMitigatedPipeline
 from src.pipeline.cascade_pipeline import CascadeDetectionPipeline
 from experiments.context import IsolatedEvaluationContext
+
+
+def validate_domain(domain: str) -> Tuple[bool, Optional[str]]:
+    """
+    Validates ASCII DNS hostname syntax conservatively according to RFC 1034 / 1035 / 1123.
+    Rejects malformed DNS names, whitespace inside the domain, shell/terminal text, URL schemes,
+    paths, empty labels, labels longer than 63 characters, and total names longer than 253 characters.
+    Returns (True, None) if valid, or (False, error_message) if invalid.
+    """
+    if domain is None or not isinstance(domain, str):
+        return False, "Domain must be a string"
+
+    if "\n" in domain or "\r" in domain or "\t" in domain:
+        return False, "Domain cannot contain newlines, carriage returns, or tabs"
+
+    clean = domain.strip()
+    if not clean:
+        return False, "Domain cannot be empty"
+
+    if any(c.isspace() for c in clean):
+        return False, "Domain cannot contain whitespace"
+
+    if "://" in clean or "/" in clean or "\\" in clean:
+        return False, "Domain cannot contain URL schemes or paths"
+
+    if ":" in clean:
+        return False, "Domain cannot contain port specifications or colons"
+
+    if clean.endswith("."):
+        clean = clean[:-1]
+
+    if not clean:
+        return False, "Domain cannot be empty"
+
+    if len(clean) > 253:
+        return False, f"Domain name exceeds maximum length of 253 characters (got {len(clean)})"
+
+    try:
+        clean.encode("ascii")
+    except UnicodeEncodeError:
+        return False, "Domain must contain only ASCII characters"
+
+    labels = clean.split(".")
+    if len(labels) < 2:
+        return False, "Domain must contain at least two labels (e.g., example.com)"
+
+    for label in labels:
+        if len(label) == 0:
+            return False, "Domain cannot contain empty labels"
+        if len(label) > 63:
+            return False, f"Domain label exceeds maximum length of 63 characters (got {len(label)})"
+        if label.startswith("-"):
+            return False, f"Domain label '{label}' cannot start with a hyphen"
+        if label.endswith("-"):
+            return False, f"Domain label '{label}' cannot end with a hyphen"
+        if not all(c.isalnum() or c == "-" for c in label):
+            return False, f"Domain label '{label}' contains invalid characters (must contain only letters, digits, and hyphens)"
+
+    if labels[-1].isdigit():
+        return False, "Top-level domain cannot be all-numeric"
+
+    return True, None
 
 
 class DashboardAdapter:
@@ -746,15 +808,20 @@ class DashboardAdapter:
             "message": f"Successfully replayed {records_processed} queries through {pipeline_cls.__name__} in isolated sandbox."
         }
 
+    validate_domain = staticmethod(validate_domain)
+
     def process_test_query(self, host: str, domain: str, query_type: int = 1) -> Dict[str, Any]:
         """
         Tests an individual DNS query through the detection pipeline in a sandbox.
         Uses CascadeDetectionPipeline if pipeline_mode == 'cascade', else ColdStartMitigatedPipeline.
+        Validates domain syntax before feature extraction or pipeline execution.
         """
+        is_valid, error_msg = self.validate_domain(domain)
+        if not is_valid:
+            return {"error": error_msg or "Invalid domain name"}
+
         clean_host = host.strip() or "10.0.0.1"
         clean_domain = domain.strip().lower().rstrip(".")
-        if not clean_domain:
-            return {"error": "Domain cannot be empty"}
 
         dummy_event = {
             "timestamp": datetime.now().isoformat(),

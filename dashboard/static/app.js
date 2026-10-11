@@ -957,13 +957,20 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ domain: domain, host: '10.0.0.1', query_type: 1 })
     })
-      .then(r => r.json())
-      .then(() => {
+      .then(async r => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || data.error) {
+          const errMsg = data.error || `Request failed (${r.status})`;
+          alert(errMsg);
+          return;
+        }
         input.value = '';
-        elements.btnTestCustom.disabled = false;
         pollCycle();
       })
-      .catch(() => {
+      .catch(err => {
+        alert(err.message || 'Failed to submit test query');
+      })
+      .finally(() => {
         elements.btnTestCustom.disabled = false;
       });
   }

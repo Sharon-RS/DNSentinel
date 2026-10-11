@@ -191,7 +191,8 @@ class DashboardHTTPRequestHandler(BaseHTTPRequestHandler):
             domain = payload.get("domain", "")
             query_type = int(payload.get("query_type", 1))
             result = ADAPTER.process_test_query(host=host, domain=domain, query_type=query_type)
-            self.send_json_response(result)
+            status_code = HTTPStatus.BAD_REQUEST if "error" in result else HTTPStatus.OK
+            self.send_json_response(result, status_code=status_code)
             return
 
         if path == "/api/clear":

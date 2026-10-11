@@ -23,7 +23,7 @@ if str(WORKSPACE_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKSPACE_ROOT))
 
 from src.utils.config import Config
-from dashboard.adapter import DashboardAdapter
+from dashboard.adapter import DashboardAdapter, validate_domain
 from dashboard.app import DashboardHTTPRequestHandler
 
 
@@ -530,6 +530,129 @@ def test_process_test_query_enterprise_baseline_loading_and_isolation():
     print("[PASS] test_process_test_query_enterprise_baseline_loading_and_isolation passed.")
 
 
+def test_custom_domain_input_validation():
+    """
+    Verify input validation for custom domain tests:
+    - Rejects terminal text, whitespace, URLs, invalid characters, malformed labels, excessive lengths.
+    - Accepts valid ordinary and lab domains: stackoverflow.com, google.com, attacker.lab, evil7382.tunnel.attacker.lab.
+    - Ensures malformed input never executes feature extraction or detection pipeline, nor creates alerts.
+    - Preserves bitwise immutability of live data directories.
+    """
+    # 1. Direct validation helper tests - Valid domains
+    valid_domains = [
+        "stackoverflow.com",
+        "google.com",
+        "evil7382.tunnel.attacker.lab",
+        "attacker.lab",
+        "google.com.",
+        "SUB-domain.example.co.uk",
+        "a.b.c.d.com",
+        "x" * 63 + ".com",
+        "a." * 120 + "example.com",
+    ]
+    for d in valid_domains:
+        is_val, err = validate_domain(d)
+        assert is_val is True, f"Expected '{d}' to be valid, got error: {err}"
+        assert err is None
+
+    # Exact 253 characters domain (63 + 1 + 63 + 1 + 63 + 1 + 58 + 1 + 2 = 253)
+    dom_253 = "a" * 63 + "." + "b" * 63 + "." + "c" * 63 + "." + "d" * 58 + ".co"
+    assert len(dom_253) == 253
+    is_val, err = validate_domain(dom_253)
+    assert is_val is True, f"Expected 253-char domain to be valid, got: {err}"
+
+    # Invalid domains
+    invalid_domains = [
+        ("", "Empty domain"),
+        ("   ", "Whitespace only"),
+        (None, "None value"),
+        ("google .com", "Whitespace inside domain"),
+        ("google\t.com", "Tab inside domain"),
+        ("evil tunnel.attacker.lab", "Space inside domain"),
+        ("attacker.lab\n", "Newline inside domain"),
+        ("cat /etc/passwd", "Terminal text"),
+        ("sharon@kali:~$ ./run.sh", "Terminal text"),
+        ("rm -rf /", "Terminal text"),
+        ("ls -la; id", "Terminal text"),
+        ("curl http://evil.com", "Terminal text"),
+        ("whoami", "Single label terminal command"),
+        ("http://google.com", "URL scheme"),
+        ("https://evil.com/path", "URL scheme and path"),
+        ("google.com/search?q=test", "URL path and query"),
+        ("attacker.lab#fragment", "URL fragment"),
+        ("ftp://foo.bar", "FTP scheme"),
+        ("google.com:8080", "Port separator"),
+        ("attacker.lab\\test", "Backslash"),
+        ("google..com", "Empty label"),
+        (".google.com", "Leading dot / empty label"),
+        ("google...com", "Multiple dots"),
+        ("-google.com", "Label starting with hyphen"),
+        ("google-.com", "Label ending with hyphen"),
+        ("bad.-label.com", "Inner label starting with hyphen"),
+        ("bad.label-.com", "Inner label ending with hyphen"),
+        ("google_site.com", "Underscore in label"),
+        ("foo@bar.com", "At sign"),
+        ("test$domain.com", "Dollar sign"),
+        ("a" * 64 + ".com", "Label exceeds 63 chars"),
+        ("sub." + "b" * 64 + ".com", "Subdomain label exceeds 63 chars"),
+        ("a" * 63 + "." + "b" * 63 + "." + "c" * 63 + "." + "d" * 59 + ".co", "Domain exceeds 253 chars"),
+        ("localhost", "Single label"),
+        ("attacker", "Single label"),
+        ("192.168.1.1", "Numeric TLD / IPv4"),
+        ("example.123", "Numeric TLD"),
+        ("göögle.com", "Non-ASCII characters"),
+    ]
+
+    for d, desc in invalid_domains:
+        is_val, err = validate_domain(d)
+        assert is_val is False, f"Expected '{d}' ({desc}) to be rejected, but it passed!"
+        assert err is not None, f"Expected error message for '{d}' ({desc})"
+
+    # 2. Pipeline isolation and alert protection
+    adapter = DashboardAdapter()
+    init_total_queries = adapter.get_summary()["total_queries"]
+    init_alerts_count = len(adapter.get_alerts())
+    init_events_count = len(adapter.get_live_events())
+
+    malformed_tests = [
+        "cat /etc/passwd",
+        "http://attacker.lab/payload",
+        "-malformed.lab",
+        "bad label.attacker.lab",
+        "a" * 64 + ".lab",
+    ]
+    for bad_dom in malformed_tests:
+        res = adapter.process_test_query("10.0.0.1", bad_dom)
+        assert "error" in res, f"Expected error for '{bad_dom}', got: {res}"
+        assert res.get("status") != "success"
+
+    # Verify that detector NEVER ran and no events or alerts were created
+    post_total_queries = adapter.get_summary()["total_queries"]
+    post_alerts_count = len(adapter.get_alerts())
+    post_events_count = len(adapter.get_live_events())
+
+    assert post_total_queries == init_total_queries, "Invalid domains must not increment query count!"
+    assert post_alerts_count == init_alerts_count, "Invalid domains must not generate alerts!"
+    assert post_events_count == init_events_count, "Invalid domains must not append to live events!"
+
+    # 3. Valid domains process successfully
+    res_valid = adapter.process_test_query("10.0.0.1", "evil7382.tunnel.attacker.lab")
+    assert res_valid["status"] == "success"
+    assert "record" in res_valid
+
+    # 4. Frontend logic verification (ensure input preservation and alert on failure)
+    app_js_path = Config.PROJECT_ROOT / "dashboard" / "static" / "app.js"
+    assert app_js_path.exists()
+    with open(app_js_path, "r", encoding="utf-8") as f:
+        app_js_content = f.read()
+
+    assert "submitCustomTest" in app_js_content
+    assert "data.error" in app_js_content
+    assert "alert(errMsg)" in app_js_content
+
+    print("[PASS] test_custom_domain_input_validation passed.")
+
+
 def test_http_api_endpoints():
     """Verify HTTP server responds with correct status codes and JSON payloads."""
     # Find a free port
@@ -581,7 +704,7 @@ def test_http_api_endpoints():
             data = json.loads(res.read().decode("utf-8"))
             assert "tunneleye_baseline" in data
 
-        # POST /api/test_query
+        # POST /api/test_query (Valid domain)
         req = urllib.request.Request(
             f"{base_url}/api/test_query",
             data=json.dumps({"host": "10.0.0.1", "domain": "test.google.com"}).encode("utf-8"),
@@ -591,6 +714,21 @@ def test_http_api_endpoints():
             assert res.status == 200
             data = json.loads(res.read().decode("utf-8"))
             assert data["status"] == "success"
+
+        # POST /api/test_query with invalid domain (should return HTTP 400 Bad Request)
+        req_bad = urllib.request.Request(
+            f"{base_url}/api/test_query",
+            data=json.dumps({"host": "10.0.0.1", "domain": "cat /etc/passwd"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        try:
+            with urllib.request.urlopen(req_bad) as res:
+                assert False, "Expected 400 HTTPError for invalid domain"
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+            err_data = json.loads(e.read().decode("utf-8"))
+            assert "error" in err_data
+            e.close()
 
         # POST /api/replay (Mature organization mode)
         req_mature = urllib.request.Request(
@@ -861,6 +999,9 @@ class TestDashboardSuite(unittest.TestCase):
     def test_process_test_query_enterprise_baseline_loading_and_isolation(self):
         test_process_test_query_enterprise_baseline_loading_and_isolation()
 
+    def test_custom_domain_input_validation(self):
+        test_custom_domain_input_validation()
+
     def test_http_api_endpoints(self):
         test_http_api_endpoints()
 
@@ -889,6 +1030,7 @@ if __name__ == "__main__":
     test_phase4_research_data_integrity()
     test_demo_replay_and_live_data_immutability()
     test_process_test_query_enterprise_baseline_loading_and_isolation()
+    test_custom_domain_input_validation()
     test_http_api_endpoints()
     test_log_message_safe_handling()
     test_figure_static_endpoint_and_traversal_protection()

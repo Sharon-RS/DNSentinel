@@ -653,6 +653,228 @@ def test_custom_domain_input_validation():
     print("[PASS] test_custom_domain_input_validation passed.")
 
 
+def test_alert_view_consistency_and_queue_isolation():
+    """
+    Regression test verifying:
+    1. Alert View displays actual dynamic baseline status rather than hardcoded quarantine status.
+    2. NORMAL and LOW_RISK events are excluded from the alert queue but remain available in the live event stream.
+    3. The same event has identical behavior_score, risk_level, domain, and host in both API responses when present in both.
+    4. Button for replaying tunnel burst attack is clearly labeled as Pipeline A1 / Unmitigated Cold Start.
+    """
+    # 1. Frontend source verification: app.js must not contain hardcoded 'Quarantined (0 Drift)'
+    app_js_path = Config.PROJECT_ROOT / "dashboard" / "static" / "app.js"
+    assert app_js_path.exists()
+    app_js = app_js_path.read_text(encoding="utf-8")
+    assert "Quarantined (0 Drift)" not in app_js, "Alert View must not contain hardcoded 'Quarantined (0 Drift)' badge!"
+    assert "formatBaselineStatus(al)" in app_js, "Alert View must use formatBaselineStatus(al) for dynamic baseline status!"
+
+    # 2. Verify index.html clearly labels Replay Tunnel Burst as Pipeline A1 / unmitigated cold start
+    html_path = Config.PROJECT_ROOT / "dashboard" / "static" / "index.html"
+    assert html_path.exists()
+    html_content = html_path.read_text(encoding="utf-8")
+    assert "Pipeline A1" in html_content, "Replay Tunnel Burst action must be clearly labeled as Pipeline A1"
+    assert "Unmitigated Cold Start" in html_content, "Replay Tunnel Burst action must be clearly labeled as Unmitigated Cold Start"
+
+    # 3. Adapter isolation and queue filtering test
+    adapter = DashboardAdapter()
+
+    ev_norm = {"source_ip": "10.0.0.1", "domain": "benign.normal.org", "query_type": 1}
+    feat_norm = {"entropy": 2.1, "domain_length": 14, "query_rate": 0.5}
+    res_norm = {
+        "behavior_score": 10.5,
+        "risk_level": "NORMAL",
+        "confidence": 0.90,
+        "baseline_updated": True,
+        "baseline_status": "Learned"
+    }
+
+    ev_low = {"source_ip": "10.0.0.2", "domain": "monitor.lowrisk.org", "query_type": 1}
+    feat_low = {"entropy": 3.2, "domain_length": 20, "query_rate": 1.2}
+    res_low = {
+        "behavior_score": 38.0,
+        "risk_level": "LOW_RISK",
+        "confidence": 0.70,
+        "baseline_updated": True,
+        "baseline_status": "Learned"
+    }
+
+    ev_susp = {"source_ip": "10.0.0.3", "domain": "novel.tunnel.suspicious.lab", "query_type": 1}
+    feat_susp = {"entropy": 4.5, "domain_length": 32, "query_rate": 2.5}
+    res_susp = {
+        "behavior_score": 54.5,
+        "risk_level": "SUSPICIOUS",
+        "confidence": 0.85,
+        "baseline_updated": False,
+        "baseline_status": "Calibrating",
+        "provisional_held": True
+    }
+
+    ev_high = {"source_ip": "10.0.0.4", "domain": "exfil.burst.highrisk.lab", "query_type": 1}
+    feat_high = {"entropy": 4.9, "domain_length": 45, "query_rate": 8.0}
+    res_high = {
+        "behavior_score": 88.0,
+        "risk_level": "HIGH_RISK",
+        "confidence": 0.95,
+        "baseline_updated": False,
+        "baseline_status": "Quarantined",
+        "quarantined": True
+    }
+
+    rec_norm = adapter.ingest_processed_event(ev_norm, feat_norm, res_norm)
+    rec_low = adapter.ingest_processed_event(ev_low, feat_low, res_low)
+    rec_susp = adapter.ingest_processed_event(ev_susp, feat_susp, res_susp)
+    rec_high = adapter.ingest_processed_event(ev_high, feat_high, res_high)
+
+    live_events = adapter.get_live_events(limit=10)
+    alerts = adapter.get_alerts(limit=10)
+
+    # Live events contains all 4 events
+    live_ids = [e["id"] for e in live_events]
+    assert rec_norm["id"] in live_ids, "NORMAL event must be in live event stream"
+    assert rec_low["id"] in live_ids, "LOW_RISK event must be in live event stream"
+    assert rec_susp["id"] in live_ids, "SUSPICIOUS event must be in live event stream"
+    assert rec_high["id"] in live_ids, "HIGH_RISK event must be in live event stream"
+
+    # Alerts queue contains ONLY SUSPICIOUS and HIGH_RISK events
+    alert_ids = [a["id"] for a in alerts]
+    assert rec_norm["id"] not in alert_ids, "NORMAL event must NOT be in alert queue"
+    assert rec_low["id"] not in alert_ids, "LOW_RISK event must NOT be in alert queue"
+    assert rec_susp["id"] in alert_ids, "SUSPICIOUS event must be in alert queue"
+    assert rec_high["id"] in alert_ids, "HIGH_RISK event must be in alert queue"
+    assert len(alerts) == 2, f"Expected exactly 2 alerts, got {len(alerts)}"
+
+    # 4. Consistency: Verify the same event has the exact same behavior_score and risk_level in both
+    for alert in alerts:
+        matching_live = next((e for e in live_events if e["id"] == alert["id"]), None)
+        assert matching_live is not None, f"Alert ID {alert['id']} missing from live stream"
+        assert alert["behavior_score"] == matching_live["behavior_score"], "behavior_score mismatch between alert and live views!"
+        assert alert["risk_level"] == matching_live["risk_level"], "risk_level mismatch between alert and live views!"
+        assert alert["domain"] == matching_live["domain"], "domain mismatch between alert and live views!"
+        assert alert["host"] == matching_live["host"], "host mismatch between alert and live views!"
+        assert alert["baseline_status"] == matching_live["baseline_status"], "baseline_status mismatch between alert and live views!"
+
+    # Verify dynamic baseline status on alert records (not hardcoded to Quarantined)
+    alert_susp = next(a for a in alerts if a["id"] == rec_susp["id"])
+    assert alert_susp["baseline_status"] == "Calibrating", f"Expected 'Calibrating', got {alert_susp['baseline_status']}"
+    alert_high = next(a for a in alerts if a["id"] == rec_high["id"])
+    assert alert_high["baseline_status"] == "Quarantined", f"Expected 'Quarantined', got {alert_high['baseline_status']}"
+
+    print("[PASS] test_alert_view_consistency_and_queue_isolation passed.")
+
+
+def test_tunnel_replay_toolbar_buttons_and_modes():
+    """
+    Regression test for the replay toolbar:
+    1. index.html contains distinct, accessible buttons for Pipeline A1, Pipeline B, and ML30 Cascade.
+    2. Tooltips and labels clearly distinguish each pipeline without hardcoding recall claims.
+    3. app.js binds event listeners that invoke triggerReplay with 'tunnel', 'tunnel_b', and 'tunnel_cascade'.
+    4. triggerReplay updates the respective button state during replay execution.
+    5. Adapter replay produces the corresponding replay_mode banner and detection telemetry for all 3 modes.
+    6. Verifies that running all three replay modes leaves live profiles, baselines, and results 100% untouched.
+    """
+    html_path = Config.PROJECT_ROOT / "dashboard" / "static" / "index.html"
+    assert html_path.exists()
+    html_content = html_path.read_text(encoding="utf-8")
+
+    # Verify Pipeline A1 button is preserved
+    assert 'id="btn-replay-tunnel"' in html_content
+    assert "Pipeline A1" in html_content
+    assert "Unmitigated Cold Start" in html_content
+
+    # Verify Pipeline B button exists
+    assert 'id="btn-replay-tunnel-b"' in html_content
+    assert "Pipeline B" in html_content
+    assert "Heuristic" in html_content
+
+    # Verify ML30 Cascade button exists
+    assert 'id="btn-replay-tunnel-cascade"' in html_content
+    assert "ML30 Cascade" in html_content
+
+    # Verify distinct labels and tooltips
+    assert 'title="DEMO REPLAY — PIPELINE A1 / UNMITIGATED COLD START (lab_trace_tunnel_burst.jsonl, 115 Queries)"' in html_content
+    assert 'title="RESEARCH REPLAY — PIPELINE B (ENTERPRISE PRIOR: lab_trace_tunnel_burst.jsonl, 115 Queries)"' in html_content
+    assert 'title="LIVE TIERED CASCADE — ML30 (RANDOM FOREST: lab_trace_tunnel_burst.jsonl, 115 Queries)"' in html_content
+
+    # Verify app.js element bindings and event listeners
+    app_js_path = Config.PROJECT_ROOT / "dashboard" / "static" / "app.js"
+    assert app_js_path.exists()
+    app_js = app_js_path.read_text(encoding="utf-8")
+
+    assert "btnReplayTunnel: document.getElementById('btn-replay-tunnel')" in app_js
+    assert "btnReplayTunnelB: document.getElementById('btn-replay-tunnel-b')" in app_js
+    assert "btnReplayTunnelCascade: document.getElementById('btn-replay-tunnel-cascade')" in app_js
+
+    assert "triggerReplay('tunnel')" in app_js
+    assert "triggerReplay('tunnel_b')" in app_js
+    assert "triggerReplay('tunnel_cascade')" in app_js
+
+    # Verify button state management in triggerReplay
+    assert "traceType === 'tunnel_b'" in app_js
+    assert "traceType === 'tunnel_cascade'" in app_js
+
+    # Verify backend replay modes and immutability
+    live_profiles_dir = Config.PROJECT_ROOT / "data" / "profiles"
+    live_org_dir = Config.PROJECT_ROOT / "data" / "organization"
+    experiments_results_dir = Config.PROJECT_ROOT / "experiments" / "results"
+
+    pre_profiles_hashes = compute_dir_hashes(live_profiles_dir)
+    pre_org_hashes = compute_dir_hashes(live_org_dir)
+    pre_results_hashes = compute_dir_hashes(experiments_results_dir)
+
+    adapter = DashboardAdapter()
+
+    # Mode 1: Pipeline A1 (tunnel)
+    res_a1 = adapter.replay_dataset("tunnel", max_records=20)
+    assert res_a1["status"] == "success"
+    assert res_a1["mode"] == "DEMO REPLAY — NOT LIVE TRAFFIC"
+    summary_a1 = adapter.get_summary()
+    assert summary_a1["is_demo_replay"] is True
+    assert summary_a1["replay_mode"] == "DEMO REPLAY — NOT LIVE TRAFFIC"
+    events_a1 = adapter.get_live_events(limit=5)
+    assert len(events_a1) > 0
+    # A1 is heuristic-only
+    assert events_a1[0]["cascade_path"] is None
+
+    # Mode 2: Pipeline B (tunnel_b)
+    adapter.clear_session()
+    res_b = adapter.replay_dataset("tunnel_b", max_records=20)
+    assert res_b["status"] == "success"
+    assert res_b["mode"] == "RESEARCH REPLAY — PIPELINE B (ENTERPRISE PRIOR)"
+    summary_b = adapter.get_summary()
+    assert summary_b["is_demo_replay"] is True
+    assert summary_b["replay_mode"] == "RESEARCH REPLAY — PIPELINE B (ENTERPRISE PRIOR)"
+    events_b = adapter.get_live_events(limit=5)
+    assert len(events_b) > 0
+    # Pipeline B is heuristic-only
+    assert events_b[0]["cascade_path"] is None
+
+    # Mode 3: ML30 Cascade (tunnel_cascade)
+    adapter.clear_session()
+    res_cascade = adapter.replay_dataset("tunnel_cascade", max_records=20)
+    assert res_cascade["status"] == "success"
+    assert res_cascade["mode"] == "LIVE TIERED CASCADE — ML30"
+    summary_cascade = adapter.get_summary()
+    assert summary_cascade["is_demo_replay"] is True
+    assert summary_cascade["replay_mode"] == "LIVE TIERED CASCADE — ML30"
+    events_cascade = adapter.get_live_events(limit=5)
+    assert len(events_cascade) > 0
+    # Cascade events contain cascade metadata
+    cascade_paths = [e["cascade_path"] for e in events_cascade if e.get("cascade_path")]
+    assert len(cascade_paths) > 0, "ML30 Cascade must emit cascade_path telemetry"
+
+    # Verify bitwise immutability
+    post_profiles_hashes = compute_dir_hashes(live_profiles_dir)
+    post_org_hashes = compute_dir_hashes(live_org_dir)
+    post_results_hashes = compute_dir_hashes(experiments_results_dir)
+
+    assert pre_profiles_hashes == post_profiles_hashes, "Live data/profiles/ modified during toolbar replay!"
+    assert pre_org_hashes == post_org_hashes, "Live data/organization/ modified during toolbar replay!"
+    assert pre_results_hashes == post_results_hashes, "experiments/results/ modified during toolbar replay!"
+
+    print("[PASS] test_tunnel_replay_toolbar_buttons_and_modes passed.")
+
+
+
 def test_http_api_endpoints():
     """Verify HTTP server responds with correct status codes and JSON payloads."""
     # Find a free port
@@ -741,6 +963,42 @@ def test_http_api_endpoints():
             data = json.loads(res.read().decode("utf-8"))
             assert data["status"] == "success"
             assert data["mode"] == "ADAPTIVE BASELINE DEMO — MATURE ORGANIZATION"
+
+        # POST /api/replay (Pipeline A1 mode)
+        req_tunnel_a1 = urllib.request.Request(
+            f"{base_url}/api/replay",
+            data=json.dumps({"trace": "tunnel", "max_records": 10}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req_tunnel_a1) as res:
+            assert res.status == 200
+            data = json.loads(res.read().decode("utf-8"))
+            assert data["status"] == "success"
+            assert data["mode"] == "DEMO REPLAY — NOT LIVE TRAFFIC"
+
+        # POST /api/replay (Pipeline B mode)
+        req_tunnel_b = urllib.request.Request(
+            f"{base_url}/api/replay",
+            data=json.dumps({"trace": "tunnel_b", "max_records": 10}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req_tunnel_b) as res:
+            assert res.status == 200
+            data = json.loads(res.read().decode("utf-8"))
+            assert data["status"] == "success"
+            assert data["mode"] == "RESEARCH REPLAY — PIPELINE B (ENTERPRISE PRIOR)"
+
+        # POST /api/replay (ML30 Cascade mode)
+        req_tunnel_cascade = urllib.request.Request(
+            f"{base_url}/api/replay",
+            data=json.dumps({"trace": "tunnel_cascade", "max_records": 10}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req_tunnel_cascade) as res:
+            assert res.status == 200
+            data = json.loads(res.read().decode("utf-8"))
+            assert data["status"] == "success"
+            assert data["mode"] == "LIVE TIERED CASCADE — ML30"
 
         # GET /nonexistent-path (404 Error handling & logging regression test)
         try:
@@ -1002,6 +1260,12 @@ class TestDashboardSuite(unittest.TestCase):
     def test_custom_domain_input_validation(self):
         test_custom_domain_input_validation()
 
+    def test_alert_view_consistency_and_queue_isolation(self):
+        test_alert_view_consistency_and_queue_isolation()
+
+    def test_tunnel_replay_toolbar_buttons_and_modes(self):
+        test_tunnel_replay_toolbar_buttons_and_modes()
+
     def test_http_api_endpoints(self):
         test_http_api_endpoints()
 
@@ -1031,6 +1295,8 @@ if __name__ == "__main__":
     test_demo_replay_and_live_data_immutability()
     test_process_test_query_enterprise_baseline_loading_and_isolation()
     test_custom_domain_input_validation()
+    test_alert_view_consistency_and_queue_isolation()
+    test_tunnel_replay_toolbar_buttons_and_modes()
     test_http_api_endpoints()
     test_log_message_safe_handling()
     test_figure_static_endpoint_and_traversal_protection()

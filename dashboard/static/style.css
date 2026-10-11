@@ -347,6 +347,26 @@ body {
   background-color: rgba(59, 130, 246, 0.28);
 }
 
+.btn-warning {
+  background-color: var(--color-suspicious-bg);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: var(--color-suspicious);
+}
+
+.btn-warning:hover {
+  background-color: rgba(245, 158, 11, 0.28);
+}
+
+.btn-cascade {
+  background-color: rgba(139, 92, 246, 0.18);
+  border-color: rgba(139, 92, 246, 0.45);
+  color: #c4b5fd;
+}
+
+.btn-cascade:hover {
+  background-color: rgba(139, 92, 246, 0.32);
+}
+
 .btn-danger {
   background-color: var(--color-danger-bg);
   border-color: rgba(239, 68, 68, 0.4);

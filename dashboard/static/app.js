@@ -36,6 +36,8 @@
     btnReplayBenign: document.getElementById('btn-replay-benign'),
     btnReplayBenignMature: document.getElementById('btn-replay-benign-mature'),
     btnReplayTunnel: document.getElementById('btn-replay-tunnel'),
+    btnReplayTunnelB: document.getElementById('btn-replay-tunnel-b'),
+    btnReplayTunnelCascade: document.getElementById('btn-replay-tunnel-cascade'),
     btnTestCustom: document.getElementById('btn-test-custom'),
     customDomainInput: document.getElementById('custom-domain-input'),
     btnExportAlerts: document.getElementById('btn-export-alerts'),
@@ -213,10 +215,24 @@
       });
     }
 
-    // Replay Tunnel Burst
+    // Replay Tunnel Burst (Pipeline A1 - Unmitigated Cold Start)
     if (elements.btnReplayTunnel) {
       elements.btnReplayTunnel.addEventListener('click', () => {
         triggerReplay('tunnel');
+      });
+    }
+
+    // Replay Tunnel Burst (Pipeline B - Heuristic Enterprise Prior)
+    if (elements.btnReplayTunnelB) {
+      elements.btnReplayTunnelB.addEventListener('click', () => {
+        triggerReplay('tunnel_b');
+      });
+    }
+
+    // Replay Tunnel Burst (ML30 Cascade - Tiered Detection)
+    if (elements.btnReplayTunnelCascade) {
+      elements.btnReplayTunnelCascade.addEventListener('click', () => {
+        triggerReplay('tunnel_cascade');
       });
     }
 
@@ -808,6 +824,7 @@
       const riskClass = getRiskBadgeClass(al.risk_level);
       const devSummary = `H: ${formatNumber(al.entropy, 2, '0.00')}, L: ${al.domain_length != null && Number.isFinite(Number(al.domain_length)) ? Number(al.domain_length) : 0}, R: ${formatNumber(al.query_rate, 1, '0.0')}`;
       const detectionMethodHtml = formatDetectionMethod(al);
+      const baselineAction = formatBaselineStatus(al);
 
       rowsHtml += `
         <tr class="alert-row" data-id="${al.id}" style="cursor: pointer;">
@@ -818,7 +835,7 @@
           <td>${detectionMethodHtml}</td>
           <td><span class="badge ${riskClass}">${escapeHtml(al.risk_level)}</span></td>
           <td class="font-mono">${formatPercent(al.confidence, 0, 'N/A')}</td>
-          <td><span class="badge badge-normal">Quarantined (0 Drift)</span></td>
+          <td>${baselineAction}</td>
           <td class="font-mono" style="font-size: 0.76rem; color: #a5f3fc;">${escapeHtml(devSummary)}</td>
           <td style="font-size: 0.78rem; color: #cbd5e1;"><em>Analyst Guidance:</em> ${escapeHtml(al.recommendation)}</td>
         </tr>
@@ -921,6 +938,10 @@
       btn = elements.btnReplayBenign;
     } else if (traceType === 'benign_mature') {
       btn = elements.btnReplayBenignMature;
+    } else if (traceType === 'tunnel_b') {
+      btn = elements.btnReplayTunnelB;
+    } else if (traceType === 'tunnel_cascade') {
+      btn = elements.btnReplayTunnelCascade;
     } else {
       btn = elements.btnReplayTunnel;
     }

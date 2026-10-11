@@ -74,8 +74,14 @@
         <button id="btn-replay-benign-mature" class="btn btn-action btn-mature" title="ADAPTIVE BASELINE DEMO — MATURE ORGANIZATION (Pre-loaded with enterprise organization baseline)">
           <span class="icon">🏢</span> Replay Benign — Mature Organization
         </button>
-        <button id="btn-replay-tunnel" class="btn btn-action btn-danger" title="Replay physical DNS tunnel burst attack (lab_trace_tunnel_burst.jsonl)">
-          <span class="icon">⚠</span> Replay Tunnel Burst Attack (115 Queries)
+        <button id="btn-replay-tunnel" class="btn btn-action btn-danger" title="DEMO REPLAY — PIPELINE A1 / UNMITIGATED COLD START (lab_trace_tunnel_burst.jsonl, 115 Queries)">
+          <span class="icon">⚠</span> Replay Tunnel Burst (Pipeline A1 — Unmitigated Cold Start)
+        </button>
+        <button id="btn-replay-tunnel-b" class="btn btn-action btn-warning" title="RESEARCH REPLAY — PIPELINE B (ENTERPRISE PRIOR: lab_trace_tunnel_burst.jsonl, 115 Queries)">
+          <span class="icon">🏢</span> Replay Tunnel Burst (Pipeline B — Heuristic)
+        </button>
+        <button id="btn-replay-tunnel-cascade" class="btn btn-action btn-cascade" title="LIVE TIERED CASCADE — ML30 (RANDOM FOREST: lab_trace_tunnel_burst.jsonl, 115 Queries)">
+          <span class="icon">⚡</span> Replay Tunnel Burst (ML30 Cascade)
         </button>
         <div class="input-query-group">
           <input type="text" id="custom-domain-input" placeholder="Test custom domain (e.g. evil7382.tunnel.attacker.lab)" />

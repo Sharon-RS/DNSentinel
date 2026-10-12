@@ -104,7 +104,15 @@ class DashboardHTTPRequestHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/alerts":
-            limit = int(query_params.get("limit", [50])[0])
+            raw_limit = query_params.get("limit", [50])[0]
+            try:
+                limit = int(raw_limit)
+                if limit <= 0:
+                    limit = 50
+                elif limit > 200:
+                    limit = 200
+            except (ValueError, TypeError):
+                limit = 50
             self.send_json_response(ADAPTER.get_alerts(limit=limit))
             return
 

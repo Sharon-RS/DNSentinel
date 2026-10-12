@@ -1033,6 +1033,34 @@ def test_http_api_endpoints():
             assert data["status"] == "success"
             assert data["mode"] == "EXPERIMENTAL CASCADE — BURST TAINT PROPAGATION"
 
+        # GET /api/alerts parameter validation and limits
+        req_alerts_200 = urllib.request.Request(f"{base_url}/api/alerts?limit=200")
+        with urllib.request.urlopen(req_alerts_200) as res:
+            assert res.status == 200
+            data = json.loads(res.read().decode("utf-8"))
+            assert isinstance(data, list)
+
+        req_alerts_default = urllib.request.Request(f"{base_url}/api/alerts")
+        with urllib.request.urlopen(req_alerts_default) as res:
+            assert res.status == 200
+            data = json.loads(res.read().decode("utf-8"))
+            assert isinstance(data, list)
+            assert len(data) <= 50
+
+        req_alerts_invalid = urllib.request.Request(f"{base_url}/api/alerts?limit=invalid_value")
+        with urllib.request.urlopen(req_alerts_invalid) as res:
+            assert res.status == 200
+            data = json.loads(res.read().decode("utf-8"))
+            assert isinstance(data, list)
+            assert len(data) <= 50
+
+        req_alerts_clamp = urllib.request.Request(f"{base_url}/api/alerts?limit=9999")
+        with urllib.request.urlopen(req_alerts_clamp) as res:
+            assert res.status == 200
+            data = json.loads(res.read().decode("utf-8"))
+            assert isinstance(data, list)
+            assert len(data) <= 200
+
         # GET /nonexistent-path (404 Error handling & logging regression test)
         try:
             with urllib.request.urlopen(f"{base_url}/nonexistent-page-404") as res:
@@ -1294,10 +1322,11 @@ def test_burst_taint_pipeline_selection_and_telemetry():
         assert te["risk_level"] == "HIGH_RISK"
         assert te["baseline_status"] in ("Calibrating", "Not Updated", "Quarantined")
 
-    # Check alert queue (alert buffer is FIFO capped at 100, retaining 100 most recent of the 114 alerts)
-    alerts = adapter.get_alerts(limit=100)
+    # Check alert queue (alert buffer has capacity >= 200, retaining all 114 alerts without eviction)
+    alerts = adapter.get_alerts(limit=200)
+    assert len(alerts) == 114, f"Expected all 114 alerts retained, got {len(alerts)}"
     tainted_alerts = [a for a in alerts if a.get("taint_propagated") is True]
-    assert len(tainted_alerts) == 3, f"Expected 3 taint-propagated queries in 100-alert window, got {len(tainted_alerts)}"
+    assert len(tainted_alerts) == 4, f"Expected all 4 taint-propagated queries in 200-alert window, got {len(tainted_alerts)}"
     for ta in tainted_alerts:
         assert ta["detection_source"] == "TAINT_PROPAGATED"
         assert ta["cascade_path"] == "TAINT_PROPAGATED"
@@ -1306,7 +1335,7 @@ def test_burst_taint_pipeline_selection_and_telemetry():
     # Verify all 4 taint-propagated queries enter alerts queue before FIFO eviction
     adapter.clear_session()
     adapter.replay_dataset("tunnel_taint", max_records=40)
-    alerts_40 = adapter.get_alerts()
+    alerts_40 = adapter.get_alerts(limit=50)
     tainted_alerts_40 = [a for a in alerts_40 if a.get("taint_propagated") is True]
     assert len(tainted_alerts_40) == 4, f"Expected all 4 taint-propagated queries in 40-record window, got {len(tainted_alerts_40)}"
 
@@ -1320,6 +1349,43 @@ def test_burst_taint_pipeline_selection_and_telemetry():
     assert not any(e.get("taint_propagated") is True for e in events_base), "Baseline cascade must never propagate taint"
 
     print("[PASS] test_burst_taint_pipeline_selection_and_telemetry passed.")
+
+
+def test_burst_taint_alert_retention_and_api_limit():
+    """
+    Regression test verifying:
+    1. MAX_ALERTS_BUFFER is at least 200.
+    2. Ingesting >100 alerts retains all alerts up to MAX_ALERTS_BUFFER.
+    3. Replaying the 115-query tunnel burst dataset preserves all 4 taint-propagated alerts in the alert queue.
+    4. GET /api/alerts?limit=200 returns all 4 taint-propagated detections.
+    5. dashboard/static/app.js requests limit=200 in fetchAlerts().
+    """
+    adapter = DashboardAdapter()
+    assert adapter.MAX_ALERTS_BUFFER >= 200
+
+    # 1. Capacity and eviction check
+    for i in range(250):
+        ev = {"source_ip": "10.0.0.1", "domain": f"test{i}.attacker.lab", "query_type": 1, "timestamp": f"2026-10-11T12:{i:02d}:00"}
+        feat = {"entropy": 4.5, "domain_length": 25, "query_rate": 5.0}
+        res = {"behavior_score": 75.0, "risk_level": "HIGH_RISK", "confidence": 0.95, "baseline_updated": False}
+        adapter.ingest_processed_event(ev, feat, res)
+    assert len(adapter.alerts_buffer) == adapter.MAX_ALERTS_BUFFER
+
+    # 2. Replay test verifying all 4 taint alerts remain retrievable
+    adapter.clear_session()
+    adapter.replay_dataset("tunnel_taint", max_records=115)
+    alerts_200 = adapter.get_alerts(limit=200)
+    assert len(alerts_200) == 114
+    tainted = [a for a in alerts_200 if a.get("taint_propagated") is True]
+    assert len(tainted) == 4, f"Expected 4 taint-propagated alerts in alert buffer, got {len(tainted)}"
+
+    # Check that app.js requests limit=200 in fetchAlerts()
+    app_js_path = Config.PROJECT_ROOT / "dashboard" / "static" / "app.js"
+    assert app_js_path.exists()
+    app_js = app_js_path.read_text(encoding="utf-8")
+    assert "fetch('/api/alerts?limit=200')" in app_js
+
+    print("[PASS] test_burst_taint_alert_retention_and_api_limit passed.")
 
 
 class TestDashboardSuite(unittest.TestCase):
@@ -1379,6 +1445,9 @@ class TestDashboardSuite(unittest.TestCase):
     def test_burst_taint_pipeline_selection_and_telemetry(self):
         test_burst_taint_pipeline_selection_and_telemetry()
 
+    def test_burst_taint_alert_retention_and_api_limit(self):
+        test_burst_taint_alert_retention_and_api_limit()
+
 
 if __name__ == "__main__":
     test_adapter_initialization_and_summary()
@@ -1399,4 +1468,5 @@ if __name__ == "__main__":
     test_all_seven_tab_sections_rendered()
     test_system_status_integrity_hashes_and_models()
     test_burst_taint_pipeline_selection_and_telemetry()
+    test_burst_taint_alert_retention_and_api_limit()
     print("\nALL DASHBOARD UNIT & INTEGRATION TESTS PASSED SUCCESSFULLY.")

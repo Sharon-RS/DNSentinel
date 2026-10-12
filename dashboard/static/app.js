@@ -469,7 +469,7 @@
   }
 
   function fetchAlerts() {
-    fetch('/api/alerts?limit=50')
+    fetch('/api/alerts?limit=200')
       .then(r => r.json())
       .then(alerts => {
         state.allAlerts = alerts;

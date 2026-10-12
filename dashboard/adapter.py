@@ -94,6 +94,7 @@ class DashboardAdapter:
     """
 
     MAX_RING_BUFFER = 300
+    MAX_ALERTS_BUFFER = 200
 
     def __init__(self):
         self._lock = threading.Lock()
@@ -219,7 +220,7 @@ class DashboardAdapter:
             # If suspicious or high risk, add to alerts buffer
             if risk_level in ("SUSPICIOUS", "HIGH_RISK"):
                 self.alerts_buffer.append(record)
-                if len(self.alerts_buffer) > 100:
+                if len(self.alerts_buffer) > self.MAX_ALERTS_BUFFER:
                     self.alerts_buffer.pop(0)
 
             return record
@@ -268,7 +269,8 @@ class DashboardAdapter:
     def get_alerts(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Returns security alerts (SUSPICIOUS and HIGH_RISK events)."""
         with self._lock:
-            return list(reversed(self.alerts_buffer[-limit:]))
+            capped_limit = max(1, min(limit, self.MAX_ALERTS_BUFFER))
+            return list(reversed(self.alerts_buffer[-capped_limit:]))
 
     # ------------------------------------------------------------------
     # Host Profiles & Organization Baselines (Read-Only)
@@ -410,7 +412,7 @@ class DashboardAdapter:
                 "ring_buffer_current": len(self.ring_buffer),
                 "ring_buffer_max": self.MAX_RING_BUFFER,
                 "alerts_buffer_current": len(self.alerts_buffer),
-                "alerts_buffer_max": 100
+                "alerts_buffer_max": self.MAX_ALERTS_BUFFER
             },
             "is_demo_replay": self.is_demo_replay,
             "last_query_timestamp": self.last_query_timestamp,

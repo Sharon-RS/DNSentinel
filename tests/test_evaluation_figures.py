@@ -59,13 +59,11 @@ class TestEvaluationFiguresAndArtifacts(unittest.TestCase):
                 self.assertEqual(header, png_magic, f"File is not a valid PNG image: {fig_path}")
 
     def test_summary_tables_and_readme_exist(self):
-        """Verifies that Table 5, its copy in figures/evaluation/, and the README exist and are non-empty."""
+        """Verifies that canonical Table 5 and the figure README exist and are non-empty."""
         t5_path = self.tables_dir / "table5_four_pipeline_evaluation.md"
-        copy_path = self.figures_dir / "summary_tables.md"
         readme_path = self.figures_dir / "README.md"
 
         self.assertTrue(t5_path.exists(), f"Summary table missing: {t5_path}")
-        self.assertTrue(copy_path.exists(), f"Summary table copy missing: {copy_path}")
         self.assertTrue(readme_path.exists(), f"Figure README missing: {readme_path}")
 
         self.assertGreater(t5_path.stat().st_size, 500, "Table 5 unexpectedly empty")

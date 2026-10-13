@@ -25,6 +25,7 @@ if str(WORKSPACE_ROOT) not in sys.path:
 from src.utils.config import Config
 from dashboard.adapter import DashboardAdapter, validate_domain
 from dashboard.app import DashboardHTTPRequestHandler
+from experiments.context import IsolatedEvaluationContext
 
 
 def compute_dir_hashes(directory: Path):
@@ -347,21 +348,100 @@ def test_detection_method_telemetry_and_ui_distinction():
 
 
 def test_host_and_organization_baselines_loading():
-    """Verify reading host profiles and enterprise organization profile from disk."""
-    adapter = DashboardAdapter()
-    hosts = adapter.get_monitored_hosts_list()
-    assert len(hosts) > 0, "Expected at least one monitored host in data/profiles/"
+    """Verify reading host profiles and enterprise organization profile from disk using isolated test fixtures."""
+    with IsolatedEvaluationContext() as ctx:
+        adapter = DashboardAdapter()
 
-    for host_ip in hosts:
-        details = adapter.get_host_profile_details(host_ip)
-        assert details is not None
-        assert "average_entropy" in details
-        assert "average_domain_length" in details
-        assert "total_queries" in details
+        # 1. Verify clean/empty behavior when no host profiles or org baseline exist
+        empty_hosts = adapter.get_monitored_hosts_list()
+        assert empty_hosts == [], f"Expected empty host list in clean sandbox, got: {empty_hosts}"
+        assert adapter.get_host_profile_details("192.168.1.100") is None
+        assert adapter.get_all_host_summaries() == []
 
-    org = adapter.get_organization_profile_details()
-    assert "status" in org
-    assert "total_queries" in org
+        empty_org = adapter.get_organization_profile_details()
+        assert empty_org["status"] == "uninitialized"
+        assert empty_org["total_queries"] == 0
+
+        # 2. Populate isolated temporary test fixtures in the sandbox
+        profiles_dir = ctx.sandbox_path / "profiles"
+        org_dir = ctx.sandbox_path / "organization"
+        profiles_dir.mkdir(parents=True, exist_ok=True)
+        org_dir.mkdir(parents=True, exist_ok=True)
+
+        fixture_host_ip = "192.168.1.100"
+        fixture_profile = {
+            "host_ip": fixture_host_ip,
+            "total_queries": 25,
+            "average_entropy": 2.45,
+            "average_domain_length": 12.5,
+            "unique_domains": ["google.com", "example.com"],
+            "domain_frequency": {"google.com": 15, "example.com": 10},
+            "query_type_frequency": {"A": 20, "AAAA": 5}
+        }
+        with open(profiles_dir / f"{fixture_host_ip}.json", "w", encoding="utf-8") as f:
+            json.dump(fixture_profile, f)
+
+        fixture_cold_ip = "10.0.0.2"
+        fixture_cold_profile = {
+            "host_ip": fixture_cold_ip,
+            "total_queries": 5,
+            "average_entropy": 3.10,
+            "average_domain_length": 15.0,
+            "unique_domains": ["attacker.lab"],
+            "domain_frequency": {"attacker.lab": 5},
+            "query_type_frequency": {"A": 5}
+        }
+        with open(profiles_dir / f"{fixture_cold_ip}.json", "w", encoding="utf-8") as f:
+            json.dump(fixture_cold_profile, f)
+
+        # Ignore .backup.json files when listing monitored hosts
+        with open(profiles_dir / f"{fixture_host_ip}.backup.json", "w", encoding="utf-8") as f:
+            json.dump(fixture_profile, f)
+
+        fixture_org = {
+            "total_queries": 100,
+            "average_entropy": 2.30,
+            "average_domain_length": 11.2,
+            "unique_domains": ["google.com", "corp.local"]
+        }
+        with open(org_dir / "organization.json", "w", encoding="utf-8") as f:
+            json.dump(fixture_org, f)
+
+        # 3. Test successful loading of monitored hosts and profile details
+        hosts = adapter.get_monitored_hosts_list()
+        assert len(hosts) == 2, f"Expected 2 monitored hosts, got {len(hosts)}"
+        assert hosts == sorted([fixture_cold_ip, fixture_host_ip])
+
+        for host_ip in hosts:
+            details = adapter.get_host_profile_details(host_ip)
+            assert details is not None
+            assert "average_entropy" in details
+            assert "average_domain_length" in details
+            assert "total_queries" in details
+            assert "calibration_state" in details
+
+        # Check mature host profile specifics
+        details = adapter.get_host_profile_details(fixture_host_ip)
+        assert details["total_queries"] == 25
+        assert details["calibration_state"] == "Graduated / Steady-State Baseline (k = 25)"
+        assert len(details["top_domains"]) == 2
+        assert details["top_domains"][0] == {"domain": "google.com", "count": 15}
+
+        # Check cold-start host profile calibration state
+        cold_details = adapter.get_host_profile_details(fixture_cold_ip)
+        assert cold_details["calibration_state"] == "Cold-Start Calibration (k = 5 / 10)"
+
+        # 4. Check host summaries aggregation
+        summaries = adapter.get_all_host_summaries()
+        assert len(summaries) == 2
+        summary_hosts = [s["host"] for s in summaries]
+        assert summary_hosts == sorted([fixture_cold_ip, fixture_host_ip])
+
+        # 5. Check organization profile loading
+        org = adapter.get_organization_profile_details()
+        assert org["status"] == "mature"
+        assert org["total_queries"] == 100
+        assert org["average_entropy"] == 2.30
 
     print("[PASS] test_host_and_organization_baselines_loading passed.")
 

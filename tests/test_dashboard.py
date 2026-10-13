@@ -1141,6 +1141,55 @@ def test_http_api_endpoints():
             assert isinstance(data, list)
             assert len(data) <= 200
 
+        # POST /api/ingest (Valid live telemetry)
+        req_ingest = urllib.request.Request(
+            f"{base_url}/api/ingest",
+            data=json.dumps({
+                "event": {
+                    "timestamp": "2026-10-13T12:00:00Z",
+                    "source_ip": "10.0.0.1",
+                    "destination_ip": "8.8.8.8",
+                    "domain": "live.api.test",
+                    "query_type": 1,
+                    "packet_size": 70
+                },
+                "features": {
+                    "entropy": 2.1,
+                    "domain_length": 13,
+                    "digit_ratio": 0.0,
+                    "query_rate": 1.0
+                },
+                "result": {
+                    "behavior_score": 10.0,
+                    "risk_level": "NORMAL",
+                    "confidence": 0.90,
+                    "recommendation": "No immediate action required.",
+                    "baseline_updated": True
+                }
+            }).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req_ingest) as res:
+            assert res.status == 200
+            ingest_data = json.loads(res.read().decode("utf-8"))
+            assert ingest_data["status"] == "success"
+            assert "id" in ingest_data
+
+        # POST /api/ingest (Invalid missing fields -> 400)
+        req_ingest_bad = urllib.request.Request(
+            f"{base_url}/api/ingest",
+            data=json.dumps({"event": {"source_ip": "10.0.0.1"}}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        try:
+            with urllib.request.urlopen(req_ingest_bad) as res:
+                assert False, "Expected 400 HTTPError for incomplete ingest payload"
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+            err_data = json.loads(e.read().decode("utf-8"))
+            assert "error" in err_data
+            e.close()
+
         # GET /nonexistent-path (404 Error handling & logging regression test)
         try:
             with urllib.request.urlopen(f"{base_url}/nonexistent-page-404") as res:

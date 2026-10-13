@@ -32,11 +32,18 @@ class DashboardHTTPRequestHandler(BaseHTTPRequestHandler):
     HTTP Request Handler serving JSON REST APIs and static dashboard assets.
     """
 
+    MAX_PAYLOAD_SIZE = 65536  # 64 KB request body size limit
+
     def log_message(self, format, *args):
-        # Suppress verbose access logs during high-frequency polling
+        # Suppress verbose access logs during high-frequency polling and live telemetry ingestion
         if args and isinstance(args[0], str):
             first_arg = args[0]
-            if "/api/live" in first_arg or "/api/summary" in first_arg or "/api/status" in first_arg:
+            if (
+                "/api/live" in first_arg
+                or "/api/summary" in first_arg
+                or "/api/status" in first_arg
+                or "/api/ingest" in first_arg
+            ):
                 return
         try:
             formatted = format % args
@@ -178,13 +185,87 @@ class DashboardHTTPRequestHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
-        content_length = int(self.headers.get("Content-Length", 0))
-        post_data = self.rfile.read(content_length) if content_length > 0 else b"{}"
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+        except (ValueError, TypeError):
+            self.send_json_response({"error": "Invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
+            return
+
+        if content_length > self.MAX_PAYLOAD_SIZE:
+            self.send_json_response({"error": "Payload exceeds maximum allowed size"}, status_code=HTTPStatus.BAD_REQUEST)
+            return
+
+        post_data = self.rfile.read(content_length) if content_length > 0 else b""
+
+        if path == "/api/ingest" and not post_data:
+            self.send_json_response({"error": "Empty request body"}, status_code=HTTPStatus.BAD_REQUEST)
+            return
 
         try:
             payload = json.loads(post_data.decode("utf-8")) if post_data else {}
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             self.send_json_response({"error": "Invalid JSON"}, status_code=HTTPStatus.BAD_REQUEST)
+            return
+
+        if path == "/api/ingest":
+            if not isinstance(payload, dict):
+                self.send_json_response({"error": "Payload must be a JSON object"}, status_code=HTTPStatus.BAD_REQUEST)
+                return
+
+            if "event" not in payload or "features" not in payload or "result" not in payload:
+                self.send_json_response(
+                    {"error": "Payload must contain 'event', 'features', and 'result' objects"},
+                    status_code=HTTPStatus.BAD_REQUEST
+                )
+                return
+
+            event = payload["event"]
+            features = payload["features"]
+            result = payload["result"]
+
+            if not isinstance(event, dict) or not isinstance(features, dict) or not isinstance(result, dict):
+                self.send_json_response(
+                    {"error": "'event', 'features', and 'result' must each be JSON objects"},
+                    status_code=HTTPStatus.BAD_REQUEST
+                )
+                return
+
+            source_ip = event.get("source_ip")
+            domain = event.get("domain")
+
+            if not source_ip or not isinstance(source_ip, str) or not source_ip.strip():
+                self.send_json_response(
+                    {"error": "Missing or invalid required event field: 'source_ip'"},
+                    status_code=HTTPStatus.BAD_REQUEST
+                )
+                return
+
+            if not domain or not isinstance(domain, str) or not domain.strip():
+                self.send_json_response(
+                    {"error": "Missing or invalid required event field: 'domain'"},
+                    status_code=HTTPStatus.BAD_REQUEST
+                )
+                return
+
+            try:
+                record = ADAPTER.ingest_processed_event(
+                    event=event,
+                    features=features,
+                    result=result,
+                    is_replay=False
+                )
+            except (ValueError, TypeError, KeyError) as e:
+                self.send_json_response(
+                    {"error": f"Invalid telemetry data structure: {str(e)}"},
+                    status_code=HTTPStatus.BAD_REQUEST
+                )
+                return
+
+            self.send_json_response({
+                "status": "success",
+                "id": record["id"],
+                "message": "Event ingested successfully"
+            }, status_code=HTTPStatus.OK)
             return
 
         if path == "/api/replay":

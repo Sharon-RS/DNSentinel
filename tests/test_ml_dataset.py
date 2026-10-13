@@ -35,12 +35,21 @@ class TestMLBenchmarkDataset(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not OUTPUT_FILE.exists():
-            generator = DNSentinelMLBenchmarkGenerator(seed=RANDOM_SEED)
-            records = generator.build_dataset()
-            with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-                for r in records:
-                    f.write(json.dumps(r) + "\n")
+        live_profiles = Config.PROJECT_ROOT / "data" / "profiles"
+        live_org = Config.PROJECT_ROOT / "data" / "organization"
+        cls.pre_profiles = get_dir_hashes(live_profiles)
+        cls.pre_org = get_dir_hashes(live_org)
+
+        try:
+            if not OUTPUT_FILE.exists():
+                generator = DNSentinelMLBenchmarkGenerator(seed=RANDOM_SEED)
+                records = generator.build_dataset()
+                with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+                    for r in records:
+                        f.write(json.dumps(r) + "\n")
+        finally:
+            cls.post_profiles = get_dir_hashes(live_profiles)
+            cls.post_org = get_dir_hashes(live_org)
 
         with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
             cls.records = [json.loads(line) for line in f if line.strip()]
@@ -140,18 +149,33 @@ class TestMLBenchmarkDataset(unittest.TestCase):
         live_profiles = Config.PROJECT_ROOT / "data" / "profiles"
         live_org = Config.PROJECT_ROOT / "data" / "organization"
 
-        # Verify known hashes
-        prof_hashes = get_dir_hashes(live_profiles)
-        org_hashes = get_dir_hashes(live_org)
+        post_profiles = get_dir_hashes(live_profiles)
+        post_org = get_dir_hashes(live_org)
 
-        self.assertIn("10.0.0.1.json", prof_hashes)
+        # Verify that setup workload did not modify runtime directories
         self.assertEqual(
-            prof_hashes["10.0.0.1.json"],
-            "395587250416f12f901aab5e45c338aa590bc597eccdafae3e85717bdd4fc1df"
+            self.pre_profiles,
+            self.post_profiles,
+            "Live data directories modified during benchmark generation setup!"
         )
         self.assertEqual(
-            org_hashes["organization.json"],
-            "68aa93e10f92236c3861ef1599ca0d46a5a0ac31ac0f91a21537710ed1e52cff"
+            self.pre_org,
+            self.post_org,
+            "Live data directories modified during benchmark generation setup!"
+        )
+
+        # Verify complete snapshot equality across the entire test execution:
+        # - In a fresh clone (absent/empty directories), asserts post_profiles == {} (no rogue files leaked)
+        # - In existing environments, asserts all pre-existing files retain exact bitwise SHA-256 hashes
+        self.assertEqual(
+            self.pre_profiles,
+            post_profiles,
+            "Live data/profiles was modified during benchmark dataset test execution!"
+        )
+        self.assertEqual(
+            self.pre_org,
+            post_org,
+            "Live data/organization was modified during benchmark dataset test execution!"
         )
 
 

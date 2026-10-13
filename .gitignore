@@ -12,3 +12,7 @@ data/models/
 logs/
 
 .env
+
+# Local runtime/demo backups
+data/demo_backups/
+*.backup.py

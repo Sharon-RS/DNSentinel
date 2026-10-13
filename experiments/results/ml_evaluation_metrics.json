@@ -1,0 +1,585 @@
+{
+  "protocol": "Phase 6D ML Evaluation",
+  "methodology": "Campaign-disjoint zero-day evaluation with temporal progression within known campaigns",
+  "partitions": {
+    "training": 3010,
+    "validation": 1276,
+    "final_test": 1714,
+    "total": 6000
+  },
+  "calibration_config": {
+    "max_operational_fpr": 0.05,
+    "behavioral_threshold": 62.0,
+    "behavioral_val_recall": 1.0,
+    "behavioral_val_fpr": 0.0312,
+    "ml30_threshold": 0.185,
+    "ml30_val_recall": 1.0,
+    "ml30_val_fpr": 0.0,
+    "ml31_threshold": 0.15,
+    "ml31_val_recall": 1.0,
+    "ml31_val_fpr": 0.0,
+    "hybrid_beta": 0.05,
+    "hybrid_threshold": 20.5,
+    "hybrid_val_recall": 1.0,
+    "hybrid_val_fpr": 0.0,
+    "cascade_s_low": 20.0,
+    "cascade_s_high": 70.0,
+    "cascade_ml_threshold": 0.2,
+    "cascade_val_recall": 1.0,
+    "cascade_val_fpr": 0.0
+  },
+  "validation_metrics": {
+    "behavioral": {
+      "configuration": "Behavioral-Only",
+      "dataset_partition": "Validation",
+      "total_samples": 1276,
+      "true_positives": 476,
+      "false_positives": 25,
+      "true_negatives": 775,
+      "false_negatives": 0,
+      "accuracy": 0.9804,
+      "precision": 0.9501,
+      "recall": 1.0,
+      "f1_score": 0.9744,
+      "false_positive_rate": 0.0312,
+      "false_negative_rate": 0.0,
+      "roc_auc": 0.9956,
+      "pr_auc": 0.9923,
+      "operating_threshold": 62.0,
+      "zero_day_recall": 0.0,
+      "hard_negative_fp_count": 0,
+      "hard_negative_fp_rate": 0.0,
+      "per_campaign_recall": {
+        "campaign_c2_stealth_alpha": {
+          "total": 75,
+          "detected": 75,
+          "recall": 1.0
+        },
+        "campaign_c2_stealth_beta": {
+          "total": 77,
+          "detected": 77,
+          "recall": 1.0
+        },
+        "campaign_tunnel_hex_delta": {
+          "total": 100,
+          "detected": 100,
+          "recall": 1.0
+        },
+        "campaign_tunnel_base32_epsilon": {
+          "total": 100,
+          "detected": 100,
+          "recall": 1.0
+        },
+        "campaign_exfil_chunk_eta": {
+          "total": 124,
+          "detected": 124,
+          "recall": 1.0
+        }
+      },
+      "latency_p50_us": 0.0,
+      "latency_p99_us": 0.0,
+      "latency_mean_us": 0.0
+    },
+    "ml30": {
+      "configuration": "ML30 (30 Features)",
+      "dataset_partition": "Validation",
+      "total_samples": 1276,
+      "true_positives": 476,
+      "false_positives": 0,
+      "true_negatives": 800,
+      "false_negatives": 0,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0,
+      "roc_auc": 1.0,
+      "pr_auc": 1.0,
+      "operating_threshold": 0.185,
+      "zero_day_recall": 0.0,
+      "hard_negative_fp_count": 0,
+      "hard_negative_fp_rate": 0.0,
+      "per_campaign_recall": {
+        "campaign_c2_stealth_alpha": {
+          "total": 75,
+          "detected": 75,
+          "recall": 1.0
+        },
+        "campaign_c2_stealth_beta": {
+          "total": 77,
+          "detected": 77,
+          "recall": 1.0
+        },
+        "campaign_tunnel_hex_delta": {
+          "total": 100,
+          "detected": 100,
+          "recall": 1.0
+        },
+        "campaign_tunnel_base32_epsilon": {
+          "total": 100,
+          "detected": 100,
+          "recall": 1.0
+        },
+        "campaign_exfil_chunk_eta": {
+          "total": 124,
+          "detected": 124,
+          "recall": 1.0
+        }
+      },
+      "latency_p50_us": 0.0,
+      "latency_p99_us": 0.0,
+      "latency_mean_us": 0.0
+    },
+    "ml31": {
+      "configuration": "ML31 (31 Features)",
+      "dataset_partition": "Validation",
+      "total_samples": 1276,
+      "true_positives": 476,
+      "false_positives": 0,
+      "true_negatives": 800,
+      "false_negatives": 0,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0,
+      "roc_auc": 1.0,
+      "pr_auc": 1.0,
+      "operating_threshold": 0.15,
+      "zero_day_recall": 0.0,
+      "hard_negative_fp_count": 0,
+      "hard_negative_fp_rate": 0.0,
+      "per_campaign_recall": {
+        "campaign_c2_stealth_alpha": {
+          "total": 75,
+          "detected": 75,
+          "recall": 1.0
+        },
+        "campaign_c2_stealth_beta": {
+          "total": 77,
+          "detected": 77,
+          "recall": 1.0
+        },
+        "campaign_tunnel_hex_delta": {
+          "total": 100,
+          "detected": 100,
+          "recall": 1.0
+        },
+        "campaign_tunnel_base32_epsilon": {
+          "total": 100,
+          "detected": 100,
+          "recall": 1.0
+        },
+        "campaign_exfil_chunk_eta": {
+          "total": 124,
+          "detected": 124,
+          "recall": 1.0
+        }
+      },
+      "latency_p50_us": 0.0,
+      "latency_p99_us": 0.0,
+      "latency_mean_us": 0.0
+    },
+    "hybrid": {
+      "configuration": "Hybrid (Behavioral + ML30)",
+      "dataset_partition": "Validation",
+      "total_samples": 1276,
+      "true_positives": 476,
+      "false_positives": 0,
+      "true_negatives": 800,
+      "false_negatives": 0,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0,
+      "roc_auc": 1.0,
+      "pr_auc": 1.0,
+      "operating_threshold": 20.5,
+      "zero_day_recall": 0.0,
+      "hard_negative_fp_count": 0,
+      "hard_negative_fp_rate": 0.0,
+      "per_campaign_recall": {
+        "campaign_c2_stealth_alpha": {
+          "total": 75,
+          "detected": 75,
+          "recall": 1.0
+        },
+        "campaign_c2_stealth_beta": {
+          "total": 77,
+          "detected": 77,
+          "recall": 1.0
+        },
+        "campaign_tunnel_hex_delta": {
+          "total": 100,
+          "detected": 100,
+          "recall": 1.0
+        },
+        "campaign_tunnel_base32_epsilon": {
+          "total": 100,
+          "detected": 100,
+          "recall": 1.0
+        },
+        "campaign_exfil_chunk_eta": {
+          "total": 124,
+          "detected": 124,
+          "recall": 1.0
+        }
+      },
+      "latency_p50_us": 0.0,
+      "latency_p99_us": 0.0,
+      "latency_mean_us": 0.0
+    },
+    "cascade": {
+      "configuration": "Tiered Cascade (Fast-Path + ML30)",
+      "dataset_partition": "Validation",
+      "total_samples": 1276,
+      "true_positives": 476,
+      "false_positives": 0,
+      "true_negatives": 800,
+      "false_negatives": 0,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0,
+      "roc_auc": 1.0,
+      "pr_auc": 1.0,
+      "operating_threshold": 0.2,
+      "zero_day_recall": 0.0,
+      "hard_negative_fp_count": 0,
+      "hard_negative_fp_rate": 0.0,
+      "per_campaign_recall": {
+        "campaign_c2_stealth_alpha": {
+          "total": 75,
+          "detected": 75,
+          "recall": 1.0
+        },
+        "campaign_c2_stealth_beta": {
+          "total": 77,
+          "detected": 77,
+          "recall": 1.0
+        },
+        "campaign_tunnel_hex_delta": {
+          "total": 100,
+          "detected": 100,
+          "recall": 1.0
+        },
+        "campaign_tunnel_base32_epsilon": {
+          "total": 100,
+          "detected": 100,
+          "recall": 1.0
+        },
+        "campaign_exfil_chunk_eta": {
+          "total": 124,
+          "detected": 124,
+          "recall": 1.0
+        }
+      },
+      "latency_p50_us": 0.0,
+      "latency_p99_us": 0.0,
+      "latency_mean_us": 0.0
+    }
+  },
+  "final_test_metrics": {
+    "behavioral": {
+      "configuration": "Behavioral-Only Baseline",
+      "dataset_partition": "Final Test",
+      "total_samples": 1714,
+      "true_positives": 916,
+      "false_positives": 14,
+      "true_negatives": 784,
+      "false_negatives": 0,
+      "accuracy": 0.9918,
+      "precision": 0.9849,
+      "recall": 1.0,
+      "f1_score": 0.9924,
+      "false_positive_rate": 0.0175,
+      "false_negative_rate": 0.0,
+      "roc_auc": 0.9981,
+      "pr_auc": 0.9983,
+      "operating_threshold": 62.0,
+      "zero_day_recall": 1.0,
+      "hard_negative_fp_count": 0,
+      "hard_negative_fp_rate": 0.0,
+      "per_campaign_recall": {
+        "campaign_c2_stealth_gamma": {
+          "total": 166,
+          "detected": 166,
+          "recall": 1.0
+        },
+        "campaign_tunnel_base64_zeta": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        },
+        "campaign_tunnel_random_theta": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        },
+        "campaign_exfil_chunk_iota": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        }
+      },
+      "latency_p50_us": 0.24,
+      "latency_p99_us": 0.29,
+      "latency_mean_us": 0.25
+    },
+    "ml30": {
+      "configuration": "ML30 (30 Raw Features)",
+      "dataset_partition": "Final Test",
+      "total_samples": 1714,
+      "true_positives": 916,
+      "false_positives": 0,
+      "true_negatives": 798,
+      "false_negatives": 0,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0,
+      "roc_auc": 1.0,
+      "pr_auc": 1.0,
+      "operating_threshold": 0.185,
+      "zero_day_recall": 1.0,
+      "hard_negative_fp_count": 0,
+      "hard_negative_fp_rate": 0.0,
+      "per_campaign_recall": {
+        "campaign_c2_stealth_gamma": {
+          "total": 166,
+          "detected": 166,
+          "recall": 1.0
+        },
+        "campaign_tunnel_base64_zeta": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        },
+        "campaign_tunnel_random_theta": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        },
+        "campaign_exfil_chunk_iota": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        }
+      },
+      "latency_p50_us": 3742.28,
+      "latency_p99_us": 4963.04,
+      "latency_mean_us": 3748.45
+    },
+    "ml31": {
+      "configuration": "ML31 (31 Features incl. Behavior)",
+      "dataset_partition": "Final Test",
+      "total_samples": 1714,
+      "true_positives": 916,
+      "false_positives": 1,
+      "true_negatives": 797,
+      "false_negatives": 0,
+      "accuracy": 0.9994,
+      "precision": 0.9989,
+      "recall": 1.0,
+      "f1_score": 0.9994,
+      "false_positive_rate": 0.0013,
+      "false_negative_rate": 0.0,
+      "roc_auc": 1.0,
+      "pr_auc": 1.0,
+      "operating_threshold": 0.15,
+      "zero_day_recall": 1.0,
+      "hard_negative_fp_count": 0,
+      "hard_negative_fp_rate": 0.0,
+      "per_campaign_recall": {
+        "campaign_c2_stealth_gamma": {
+          "total": 166,
+          "detected": 166,
+          "recall": 1.0
+        },
+        "campaign_tunnel_base64_zeta": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        },
+        "campaign_tunnel_random_theta": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        },
+        "campaign_exfil_chunk_iota": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        }
+      },
+      "latency_p50_us": 3856.7,
+      "latency_p99_us": 6331.24,
+      "latency_mean_us": 3917.74
+    },
+    "hybrid": {
+      "configuration": "Hybrid (Behavioral + ML30)",
+      "dataset_partition": "Final Test",
+      "total_samples": 1714,
+      "true_positives": 916,
+      "false_positives": 0,
+      "true_negatives": 798,
+      "false_negatives": 0,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0,
+      "roc_auc": 1.0,
+      "pr_auc": 1.0,
+      "operating_threshold": 20.5,
+      "zero_day_recall": 1.0,
+      "hard_negative_fp_count": 0,
+      "hard_negative_fp_rate": 0.0,
+      "per_campaign_recall": {
+        "campaign_c2_stealth_gamma": {
+          "total": 166,
+          "detected": 166,
+          "recall": 1.0
+        },
+        "campaign_tunnel_base64_zeta": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        },
+        "campaign_tunnel_random_theta": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        },
+        "campaign_exfil_chunk_iota": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        }
+      },
+      "latency_p50_us": 4145.93,
+      "latency_p99_us": 6928.2,
+      "latency_mean_us": 4279.14
+    },
+    "cascade": {
+      "configuration": "Tiered Cascade (Fast-Path + ML30)",
+      "dataset_partition": "Final Test",
+      "total_samples": 1714,
+      "true_positives": 916,
+      "false_positives": 0,
+      "true_negatives": 798,
+      "false_negatives": 0,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0,
+      "roc_auc": 1.0,
+      "pr_auc": 1.0,
+      "operating_threshold": 0.2,
+      "zero_day_recall": 1.0,
+      "hard_negative_fp_count": 0,
+      "hard_negative_fp_rate": 0.0,
+      "per_campaign_recall": {
+        "campaign_c2_stealth_gamma": {
+          "total": 166,
+          "detected": 166,
+          "recall": 1.0
+        },
+        "campaign_tunnel_base64_zeta": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        },
+        "campaign_tunnel_random_theta": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        },
+        "campaign_exfil_chunk_iota": {
+          "total": 250,
+          "detected": 250,
+          "recall": 1.0
+        }
+      },
+      "latency_p50_us": 0.32,
+      "latency_p99_us": 11327.07,
+      "latency_mean_us": 1794.7
+    }
+  },
+  "ml30_feature_importances": {
+    "lex_domain_length": 0.267677,
+    "lex_packet_size": 0.185427,
+    "org_length_deviation": 0.124135,
+    "lex_entropy": 0.081024,
+    "host_length_deviation": 0.070723,
+    "host_entropy_deviation": 0.056018,
+    "org_entropy_deviation": 0.047501,
+    "lex_subdomain_length": 0.034407,
+    "org_rarity_score": 0.029456,
+    "lex_special_ratio": 0.013689,
+    "temp_inter_arrival_time": 0.013058,
+    "lex_alphabet_ratio": 0.013055,
+    "lex_digit_ratio": 0.00991,
+    "org_domain_frequency": 0.009801,
+    "temp_window_duration": 0.007506,
+    "lex_label_count": 0.0074,
+    "temp_query_rate": 0.006348,
+    "lex_subdomain_ratio": 0.004264,
+    "org_total_queries": 0.004134,
+    "host_total_queries": 0.003348,
+    "host_average_entropy": 0.002879,
+    "org_average_domain_length": 0.002864,
+    "temp_unique_ratio": 0.002567,
+    "org_average_entropy": 0.001046,
+    "temp_entropy_trend": 0.000634,
+    "host_average_domain_length": 0.000469,
+    "temp_length_trend": 0.000277,
+    "host_query_rate_deviation": 0.000271,
+    "proto_query_type": 0.000112,
+    "host_novel_domain": 0.0
+  },
+  "ml31_feature_importances": {
+    "lex_domain_length": 0.245711,
+    "lex_packet_size": 0.167871,
+    "behavior_score": 0.154016,
+    "org_length_deviation": 0.085139,
+    "lex_entropy": 0.064024,
+    "host_length_deviation": 0.052949,
+    "org_domain_frequency": 0.038801,
+    "lex_subdomain_length": 0.036902,
+    "org_entropy_deviation": 0.034627,
+    "host_entropy_deviation": 0.031641,
+    "lex_digit_ratio": 0.013955,
+    "temp_window_duration": 0.010243,
+    "lex_alphabet_ratio": 0.010153,
+    "lex_special_ratio": 0.008475,
+    "lex_label_count": 0.008077,
+    "org_rarity_score": 0.007108,
+    "temp_query_rate": 0.006721,
+    "org_average_entropy": 0.004028,
+    "host_total_queries": 0.003203,
+    "lex_subdomain_ratio": 0.002821,
+    "host_novel_domain": 0.002498,
+    "host_average_entropy": 0.002261,
+    "org_total_queries": 0.002081,
+    "temp_unique_ratio": 0.001991,
+    "temp_inter_arrival_time": 0.001848,
+    "host_average_domain_length": 0.000734,
+    "temp_entropy_trend": 0.00064,
+    "org_average_domain_length": 0.000586,
+    "temp_length_trend": 0.000528,
+    "proto_query_type": 0.000361,
+    "host_query_rate_deviation": 5e-06
+  }
+}

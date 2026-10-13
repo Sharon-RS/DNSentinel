@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DNSentinel — SOC Behavioral Telemetry &amp; Research Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Top Replay Banner (shown dynamically when replay mode is active) -->
+  <div id="replay-banner" class="banner-replay hidden">
+    <div class="banner-content">
+      <span class="banner-pulse"></span>
+      <span id="replay-banner-text" class="banner-text">DEMO REPLAY — NOT LIVE TRAFFIC</span>
+    </div>
+  </div>
+
+  <div class="app-container">
+
+    <!-- Header Navigation Bar -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="logo-shield">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>DNSentinel</h1>
+          <span class="brand-badge">Adaptive Behavioral Engine &amp; ML Tiered Cascade</span>
+        </div>
+      </div>
+
+      <!-- Quick Telemetry Indicators -->
+      <div class="header-pills">
+        <div class="pill" id="pill-bind" title="Local BIND9 Resolver Status">
+          <span class="pill-dot"></span>
+          <span class="pill-label">BIND9: <strong id="bind-status">Checking...</strong></span>
+        </div>
+        <div class="pill" id="pill-capture" title="Interface ens33 Capture Status">
+          <span class="pill-dot"></span>
+          <span class="pill-label">Interface: <strong id="capture-status">ens33</strong></span>
+        </div>
+        <div class="pill" id="pill-hosts" title="Monitored Host Profiles in data/profiles">
+          <span class="pill-label">Hosts: <strong id="hosts-count">0</strong></span>
+        </div>
+      </div>
+
+      <!-- Live Controls -->
+      <div class="header-controls">
+        <button id="btn-pause-poll" class="btn btn-secondary" title="Pause or Resume HTTP Telemetry Polling">
+          <span id="poll-icon">⏸</span> <span id="poll-label">Pause Feed</span>
+        </button>
+        <button id="btn-clear-feed" class="btn btn-secondary" title="Clear in-memory ring buffer">
+          <span>🧹</span> Clear View
+        </button>
+      </div>
+    </header>
+
+    <!-- Interactive Demo Replay Toolbar -->
+    <div class="replay-toolbar">
+      <div class="toolbar-title">
+        <span class="toolbar-icon">⚡</span>
+        <span>SOC Demonstration &amp; Workload Replay:</span>
+      </div>
+      <div class="toolbar-actions">
+        <button id="btn-replay-benign" class="btn btn-action btn-benign" title="RESEARCH REPLAY — UNMITIGATED COLD START (119 Queries, 21 alerts, 17.65% FPR)">
+          <span class="icon">🔬</span> Replay Benign Trace (119 Queries)
+        </button>
+        <button id="btn-replay-benign-mature" class="btn btn-action btn-mature" title="ADAPTIVE BASELINE DEMO — MATURE ORGANIZATION (Pre-loaded with enterprise organization baseline)">
+          <span class="icon">🏢</span> Replay Benign — Mature Organization
+        </button>
+        <button id="btn-replay-tunnel" class="btn btn-action btn-danger" title="DEMO REPLAY — PIPELINE A1 / UNMITIGATED COLD START (lab_trace_tunnel_burst.jsonl, 115 Queries)">
+          <span class="icon">⚠</span> Replay Tunnel Burst (Pipeline A1 — Unmitigated Cold Start)
+        </button>
+        <button id="btn-replay-tunnel-b" class="btn btn-action btn-warning" title="RESEARCH REPLAY — PIPELINE B (ENTERPRISE PRIOR: lab_trace_tunnel_burst.jsonl, 115 Queries)">
+          <span class="icon">🏢</span> Replay Tunnel Burst (Pipeline B — Heuristic)
+        </button>
+        <button id="btn-replay-tunnel-cascade" class="btn btn-action btn-cascade" title="LIVE TIERED CASCADE — ML30 (RANDOM FOREST: lab_trace_tunnel_burst.jsonl, 115 Queries)">
+          <span class="icon">⚡</span> Replay Tunnel Burst (ML30 Cascade)
+        </button>
+        <button id="btn-replay-tunnel-taint" class="btn btn-action btn-taint" title="EXPERIMENTAL CASCADE — BURST TAINT PROPAGATION (ML30 + BURST TAINT: lab_trace_tunnel_burst.jsonl, 115 Queries)">
+          <span class="icon">🧬</span> Replay Tunnel Burst (ML30 + Burst-Taint)
+        </button>
+        <div class="input-query-group">
+          <input type="text" id="custom-domain-input" placeholder="Test custom domain (e.g. evil7382.tunnel.attacker.lab)" />
+          <button id="btn-test-custom" class="btn btn-action btn-primary">Test Domain</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs (7 Independent Target Sections) -->
+    <nav class="nav-tabs" role="tablist">
+      <button class="tab-btn active" data-tab="tab-live" role="tab" id="tab-btn-live">
+        <span class="tab-icon">📡</span> 1. Live Monitor
+      </button>
+      <button class="tab-btn" data-tab="tab-risk" role="tab" id="tab-btn-risk">
+        <span class="tab-icon">📊</span> 2. Risk Overview
+      </button>
+      <button class="tab-btn" data-tab="tab-behavior" role="tab" id="tab-btn-behavior">
+        <span class="tab-icon">🧠</span> 3. Behavioral Analysis
+      </button>
+      <button class="tab-btn" data-tab="tab-hosts" role="tab" id="tab-btn-hosts">
+        <span class="tab-icon">🖥️</span> 4. Host View
+      </button>
+      <button class="tab-btn" data-tab="tab-alerts" role="tab" id="tab-btn-alerts">
+        <span class="tab-icon">🚨</span> 5. Alert View <span id="badge-alerts-count" class="badge-count">0</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-research" role="tab" id="tab-btn-research">
+        <span class="tab-icon">🔬</span> 6. Research Results
+      </button>
+      <button class="tab-btn" data-tab="tab-system" role="tab" id="tab-btn-system">
+        <span class="tab-icon">⚙️</span> 7. System Status
+      </button>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="content-container">
+
+      <!-- ========================================================= -->
+      <!-- SECTION 1: LIVE MONITOR                                   -->
+      <!-- ========================================================= -->
+      <section id="tab-live" class="tab-content active" role="tabpanel">
+
+        <!-- Metric Overview Strip -->
+        <div class="metrics-grid">
+          <div class="metric-card card-total">
+            <div class="metric-title">TOTAL QUERIES OBSERVED</div>
+            <div class="metric-value" id="stat-total">0</div>
+            <div class="metric-sub" id="stat-last-time">Last: Never</div>
+          </div>
+          <div class="metric-card card-normal">
+            <div class="metric-title">NORMAL TRAFFIC</div>
+            <div class="metric-value" id="stat-normal">0</div>
+            <div class="metric-sub" id="stat-normal-pct">0.0% of total</div>
+          </div>
+          <div class="metric-card card-low">
+            <div class="metric-title">LOW RISK MONITOR</div>
+            <div class="metric-value" id="stat-low">0</div>
+            <div class="metric-sub" id="stat-low-pct">0.0% of total</div>
+          </div>
+          <div class="metric-card card-suspicious">
+            <div class="metric-title">SUSPICIOUS QUERIES</div>
+            <div class="metric-value" id="stat-suspicious">0</div>
+            <div class="metric-sub">Requires triage</div>
+          </div>
+          <div class="metric-card card-danger">
+            <div class="metric-title">HIGH RISK DETECTIONS</div>
+            <div class="metric-value" id="stat-high">0</div>
+            <div class="metric-sub">Quarantined / Alerted</div>
+          </div>
+        </div>
+
+        <!-- Live Query Stream Table -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <h3>Sequential DNS Behavioral Stream</h3>
+              <span class="panel-sub" id="live-buffer-info">Buffering recent events</span>
+            </div>
+            <div class="filter-group">
+              <label for="filter-risk">Filter Risk:</label>
+              <select id="filter-risk" class="select-dropdown">
+                <option value="ALL">All Risk Levels</option>
+                <option value="HIGH_RISK">High Risk Only</option>
+                <option value="SUSPICIOUS">Suspicious &amp; Above</option>
+                <option value="NORMAL">Normal Only</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table" id="table-live-events">
+              <thead>
+                <tr>
+                  <th style="width: 140px;">Timestamp</th>
+                  <th style="width: 130px;">Host</th>
+                  <th>Domain</th>
+                  <th style="width: 70px;">Query Type</th>
+                  <th style="width: 90px;" title="Shannon Entropy in bits">Entropy</th>
+                  <th style="width: 80px;" title="Total domain length">Domain Length</th>
+                  <th style="width: 90px;" title="Sliding window temporal query rate (QPS)">Query Rate</th>
+                  <th style="width: 90px;" title="Composite Behavior Score [0, 100]. Note: Behavioral score and final cascade risk level are different signals.">Risk Score</th>
+                  <th style="width: 190px;" title="Pipeline evaluation tier. Note: Behavioral score and final cascade risk level are different signals.">Detection Method</th>
+                  <th style="width: 120px;" title="Final evaluated risk level. Note: Behavioral score and final cascade risk level are different signals.">Risk Level</th>
+                  <th style="width: 110px;" title="Real-time baseline protection status">Baseline Status</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-live-events">
+                <!-- Dynamically populated or empty-state -->
+              </tbody>
+            </table>
+
+            <div id="live-empty-state" class="empty-state">
+              <div class="empty-icon">📡</div>
+              <h4>No Live DNS Telemetry Observed Yet</h4>
+              <p>Start DNSentinel capture or click one of the <strong>Workload Replay</strong> buttons above to evaluate traffic traces in real time.</p>
+            </div>
+          </div>
+
+          <div class="table-footnote">
+            * Note: Behavioral score (heuristic baseline deviation) and final cascade risk level (which incorporates ML30 classification when escalated) are different signals.
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- SECTION 2: RISK OVERVIEW                                  -->
+      <!-- ========================================================= -->
+      <section id="tab-risk" class="tab-content" role="tabpanel">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <h3>Risk Classification Hierarchy &amp; Baseline Protection Status</h3>
+              <span class="panel-sub">Decisions evaluated server-side by production RiskEngine without frontend thresholds</span>
+            </div>
+            <span class="badge badge-normal">RiskEngine Evaluator</span>
+          </div>
+
+          <!-- Risk Distribution Progress Bar -->
+          <div class="risk-distribution-container">
+            <div class="risk-progress-bar">
+              <div id="bar-normal" class="progress-segment bar-normal" style="width: 25%;"></div>
+              <div id="bar-low" class="progress-segment bar-low" style="width: 25%;"></div>
+              <div id="bar-suspicious" class="progress-segment bar-suspicious" style="width: 25%;"></div>
+              <div id="bar-high" class="progress-segment bar-high" style="width: 25%;"></div>
+            </div>
+
+            <!-- 4 Risk Level Cards -->
+            <div class="risk-legend-grid">
+              <div class="legend-card legend-normal">
+                <div class="legend-badge">NORMAL (Score &lt; 30)</div>
+                <div class="legend-desc">Baseline trusted traffic. Eligible to update persistent rolling host Gaussian profile.</div>
+                <div class="legend-stat" id="stat-card-normal">Count: 0 (0.0%)</div>
+                <div class="legend-guard"><strong>Baseline Status:</strong> Learning Allowed (Active)</div>
+              </div>
+              <div class="legend-card legend-low">
+                <div class="legend-badge">LOW RISK (Score 30 - 49)</div>
+                <div class="legend-desc">Minor novelty or mild length variance. Safe to update persistent baselines.</div>
+                <div class="legend-stat" id="stat-card-low">Count: 0 (0.0%)</div>
+                <div class="legend-guard"><strong>Baseline Status:</strong> Learning Allowed (Active)</div>
+              </div>
+              <div class="legend-card legend-suspicious">
+                <div class="legend-badge">SUSPICIOUS (Score 50 - 69)</div>
+                <div class="legend-desc">Significant deviation in entropy, novelty, or rate. <strong>Quarantined: Baseline NOT updated.</strong></div>
+                <div class="legend-stat" id="stat-card-suspicious">Count: 0 (0.0%)</div>
+                <div class="legend-guard"><strong>Baseline Status:</strong> Quarantined (Zero Baseline Drift)</div>
+              </div>
+              <div class="legend-card legend-danger">
+                <div class="legend-badge">HIGH RISK (Score &ge; 70)</div>
+                <div class="legend-desc">Potential tunneling or exfiltration detected. <strong>Quarantined: Zero baseline drift permitted.</strong></div>
+                <div class="legend-stat" id="stat-card-high">Count: 0 (0.0%)</div>
+                <div class="legend-guard"><strong>Baseline Status:</strong> Quarantined (Zero Baseline Drift)</div>
+              </div>
+            </div>
+
+            <!-- Triage Summary & Guardrails -->
+            <div class="risk-summary-callout">
+              <div class="callout-item">
+                <span class="callout-label">Active Security Alerts:</span>
+                <span class="callout-val" id="risk-alert-count">0</span>
+              </div>
+              <div class="callout-item">
+                <span class="callout-label">Quarantine Protection Active:</span>
+                <span class="callout-val text-success">Enabled (Zero-Drift Memory Guard)</span>
+              </div>
+              <div class="callout-item">
+                <span class="callout-label">Scoring Authority:</span>
+                <span class="callout-val">Server-Side RiskEngine (src/risk/risk_engine.py)</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- SECTION 3: BEHAVIORAL ANALYSIS                            -->
+      <!-- ========================================================= -->
+      <section id="tab-behavior" class="tab-content" role="tabpanel">
+        <div class="grid-2-col">
+
+          <!-- 5-Tier Behavioral Distance Decomposition -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title-group">
+                <h3>5-Tier Behavioral Deviation Breakdown</h3>
+                <span class="panel-sub" id="behavior-selected-label">Showing latest evaluated query</span>
+              </div>
+              <span class="badge badge-primary">Weight Vector</span>
+            </div>
+
+            <p class="panel-desc">
+              DNSentinel evaluates multi-dimensional behavioral distance across host, temporal, and enterprise context using backend-supplied deviations ($S = 100 \times \sum w_i D_i$):
+            </p>
+
+            <div class="behavior-tiers-list">
+
+              <div class="tier-item">
+                <div class="tier-header">
+                  <span class="tier-name">1. Shannon Entropy Deviation ($D_{\text{entropy}}$)</span>
+                  <span class="tier-weight">Weight: 25% (0.25)</span>
+                </div>
+                <div class="tier-bar-bg"><div id="tier-bar-entropy" class="tier-bar-fill" style="width: 0%;"></div></div>
+                <div class="tier-sub" id="tier-val-entropy">Current: 0.0000 | Compares domain entropy against host rolling mean &amp; std</div>
+              </div>
+
+              <div class="tier-item">
+                <div class="tier-header">
+                  <span class="tier-name">2. Domain Length Deviation ($D_{\text{length}}$)</span>
+                  <span class="tier-weight">Weight: 20% (0.20)</span>
+                </div>
+                <div class="tier-bar-bg"><div id="tier-bar-length" class="tier-bar-fill" style="width: 0%;"></div></div>
+                <div class="tier-sub" id="tier-val-length">Current: 0.0000 | Penalizes encoded payload bloat exceeding host baseline</div>
+              </div>
+
+              <div class="tier-item">
+                <div class="tier-header">
+                  <span class="tier-name">3. Temporal Query Rate Deviation ($D_{\text{rate}}$)</span>
+                  <span class="tier-weight">Weight: 15% (0.15)</span>
+                </div>
+                <div class="tier-bar-bg"><div id="tier-bar-rate" class="tier-bar-fill" style="width: 0%;"></div></div>
+                <div class="tier-sub" id="tier-val-rate">Current: 0.0000 | Measures burst rate $R = (N-1)/\Delta t$ against baseline 2.0 QPS</div>
+              </div>
+
+              <div class="tier-item">
+                <div class="tier-header">
+                  <span class="tier-name">4. Novel Domain Host Score ($D_{\text{novel}}$)</span>
+                  <span class="tier-weight">Weight: 20% (0.20)</span>
+                </div>
+                <div class="tier-bar-bg"><div id="tier-bar-novel" class="tier-bar-fill" style="width: 0%;"></div></div>
+                <div class="tier-sub" id="tier-val-novel">Current: 0.0000 | Flags domains never previously resolved by this host</div>
+              </div>
+
+              <div class="tier-item">
+                <div class="tier-header">
+                  <span class="tier-name">5. Organization Rarity Score ($D_{\text{org}}$)</span>
+                  <span class="tier-weight">Weight: 20% (0.20)</span>
+                </div>
+                <div class="tier-bar-bg"><div id="tier-bar-org" class="tier-bar-fill" style="width: 0%;"></div></div>
+                <div class="tier-sub" id="tier-val-org">Current: 0.0000 | Inverse frequency score across all enterprise hosts</div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Sliding Window & Selected Observation Card -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title-group">
+                <h3>Temporal Dynamics &amp; Sliding Window Rate</h3>
+                <span class="panel-sub">Recent observation context</span>
+              </div>
+              <span class="badge badge-secondary">Sliding Window</span>
+            </div>
+
+            <!-- Selected Observation Meta Card -->
+            <div class="sub-panel">
+              <h4>Inspected Query Attributes</h4>
+              <div class="query-meta-grid">
+                <div class="meta-box"><span class="meta-lbl">Host IP:</span> <span class="meta-val font-mono" id="behavior-meta-host">-</span></div>
+                <div class="meta-box"><span class="meta-lbl">Domain:</span> <span class="meta-val font-mono" id="behavior-meta-domain">-</span></div>
+                <div class="meta-box"><span class="meta-lbl">Behavior Score:</span> <span class="meta-val font-mono font-bold" id="behavior-meta-score">-</span></div>
+                <div class="meta-box"><span class="meta-lbl">Confidence:</span> <span class="meta-val font-mono" id="behavior-meta-conf">-</span></div>
+              </div>
+            </div>
+
+            <!-- Sliding Window Temporal Rate Box -->
+            <div class="sub-panel">
+              <h4>Sliding Window Query Rate ($R$)</h4>
+              <p class="panel-desc">Calculated causally using the sliding window formula $R = (N - 1) / \Delta t$ over recent queries:</p>
+              <div class="stats-mini-grid">
+                <div class="stat-mini">
+                  <div class="stat-mini-val font-mono" id="sw-rate-val">0.00 QPS</div>
+                  <div class="stat-mini-lbl">Current Observed Rate</div>
+                </div>
+                <div class="stat-mini">
+                  <div class="stat-mini-val font-mono">2.00 QPS</div>
+                  <div class="stat-mini-lbl">Baseline Rate Reference</div>
+                </div>
+                <div class="stat-mini">
+                  <div class="stat-mini-val font-mono">20 Queries</div>
+                  <div class="stat-mini-lbl">Window Capacity ($W$)</div>
+                </div>
+                <div class="stat-mini">
+                  <div class="stat-mini-val font-mono">60 Seconds</div>
+                  <div class="stat-mini-lbl">Time Horizon ($\Delta t$)</div>
+                </div>
+              </div>
+              <div class="window-burst-status" id="sw-burst-status">
+                <span class="pill-dot"></span> <span>Normal Temporal Traffic Pace</span>
+              </div>
+            </div>
+
+            <!-- Interactive selector tip -->
+            <div class="interactive-tip-box">
+              <span>💡 <strong>Tip:</strong> Click any row in the <em>Live Monitor</em> or <em>Alert View</em> table to inspect its full 5-tier behavioral breakdown above.</span>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- SECTION 4: HOST VIEW                                      -->
+      <!-- ========================================================= -->
+      <section id="tab-hosts" class="tab-content" role="tabpanel">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <h3>Monitored Host Profiles &amp; Baseline Diagnostics</h3>
+              <span class="panel-sub">Persistent Gaussian baselines stored in data/profiles/</span>
+            </div>
+            <div class="filter-group">
+              <label for="select-host-profile">Select Host:</label>
+              <select id="select-host-profile" class="select-dropdown">
+                <!-- Dynamically populated -->
+              </select>
+            </div>
+          </div>
+
+          <!-- Selected Host Detailed View -->
+          <div id="host-details-view" class="host-details-container">
+
+            <div class="host-header-strip">
+              <div class="host-title-info">
+                <h4 id="host-display-ip">Host: -</h4>
+                <span id="host-calibration-state" class="badge badge-primary">Calibration State: -</span>
+              </div>
+            </div>
+
+            <div class="host-stats-grid">
+              <div class="host-stat-box">
+                <div class="stat-num" id="host-total-q">-</div>
+                <div class="stat-lbl">Total Queries Processed</div>
+              </div>
+              <div class="host-stat-box">
+                <div class="stat-num" id="host-avg-entropy">-</div>
+                <div class="stat-lbl">Average Entropy ($\mu_H$)</div>
+              </div>
+              <div class="host-stat-box">
+                <div class="stat-num" id="host-avg-length">-</div>
+                <div class="stat-lbl">Average Length ($\mu_L$)</div>
+              </div>
+              <div class="host-stat-box">
+                <div class="stat-num" id="host-unique-domains">-</div>
+                <div class="stat-lbl">Unique Domains Resolved</div>
+              </div>
+            </div>
+
+            <!-- Top Domains Table -->
+            <div class="sub-panel">
+              <h4>Top Queried Domains by Selected Host</h4>
+              <table class="data-table" id="table-host-domains">
+                <thead>
+                  <tr>
+                    <th>Domain Name</th>
+                    <th style="width: 140px;">Query Count</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-host-domains">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Query Type Breakdown -->
+            <div class="sub-panel">
+              <h4>Query Type Distribution</h4>
+              <div id="host-query-types" class="chips-container">
+                <!-- Chips populated -->
+              </div>
+            </div>
+          </div>
+
+          <div id="host-empty-state" class="empty-state hidden">
+            <div class="empty-icon">🖥️</div>
+            <h4>No Host Profile Selected</h4>
+            <p>Select a host from the dropdown above to inspect its learned baseline statistics.</p>
+          </div>
+
+          <!-- All Monitored Hosts Cards Grid -->
+          <div class="sub-panel mt-4">
+            <h4>All Monitored Hosts Overview</h4>
+            <div id="hosts-cards-grid" class="hosts-overview-grid">
+              <!-- Dynamically populated with host cards -->
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- SECTION 5: ALERT VIEW                                     -->
+      <!-- ========================================================= -->
+      <section id="tab-alerts" class="tab-content" role="tabpanel">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <h3>Security Incident Response: Suspicious &amp; High Risk Detections</h3>
+              <span class="panel-sub">Filtered triage queue containing only score &ge; 50 events</span>
+            </div>
+            <div class="header-actions">
+              <div class="filter-group">
+                <label for="filter-alert-severity">Severity:</label>
+                <select id="filter-alert-severity" class="select-dropdown">
+                  <option value="ALL">All Alerts</option>
+                  <option value="HIGH_RISK">High Risk Only</option>
+                  <option value="SUSPICIOUS">Suspicious Only</option>
+                </select>
+              </div>
+              <button id="btn-export-alerts" class="btn btn-secondary">
+                <span>📋</span> Export Alerts CSV
+              </button>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table" id="table-alerts">
+              <thead>
+                <tr>
+                  <th style="width: 130px;">Detection Time</th>
+                  <th style="width: 120px;">Host IP</th>
+                  <th>Flagged Target Domain</th>
+                  <th style="width: 80px;" title="Composite Behavior Score [0, 100]. Note: Behavioral score and final cascade risk level are different signals.">Risk Score</th>
+                  <th style="width: 190px;" title="Pipeline evaluation tier. Note: Behavioral score and final cascade risk level are different signals.">Detection Method</th>
+                  <th style="width: 110px;" title="Final evaluated risk level. Note: Behavioral score and final cascade risk level are different signals.">Risk Level</th>
+                  <th style="width: 80px;">Confidence</th>
+                  <th style="width: 130px;">Baseline Guard</th>
+                  <th style="width: 160px;">Relevant Behavioral Deviations</th>
+                  <th>Actionable Recommendation (Dashboard Guidance)</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-alerts">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+
+            <div id="alerts-empty-state" class="empty-state">
+              <div class="empty-icon">🛡️</div>
+              <h4>No Security Alerts in Current Session</h4>
+              <p>All processed queries are operating within normal behavioral bounds. Replay the <strong>Tunnel Burst Attack</strong> to simulate live tunneling alerts.</p>
+            </div>
+          </div>
+
+          <div class="table-footnote">
+            * Note: Behavioral score and final cascade risk level are different signals. Recommendations displayed in the UI represent analytical dashboard guidance for human operators, not automated enforcement actions.
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- SECTION 6: RESEARCH RESULTS (PHASE 7B PUBLICATION SUITE) -->
+      <!-- ========================================================= -->
+      <section id="tab-research" class="tab-content" role="tabpanel">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <h3>Phase 7B Publication-Ready Comparative Evaluation &amp; Research Results</h3>
+              <span class="badge badge-normal">Frozen Checkpoint: 6cbeb35</span>
+            </div>
+          </div>
+
+          <!-- Mandatory Methodological Disclaimers -->
+          <div class="disclaimer-grid">
+            <div class="disclaimer-box boundary-box">
+              <div class="disclaimer-title">🔬 Methodological Evaluation Disclaimer</div>
+              <div class="disclaimer-body">
+                "Results shown here are from controlled held-out and laboratory evaluations. They do not constitute universal production guarantees."
+              </div>
+            </div>
+            <div class="disclaimer-box tunneleye-box">
+              <div class="disclaimer-title">⚖️ Cross-Layer TunnelEye Boundary</div>
+              <div class="disclaimer-body">
+                "TunnelEye and DNSentinel operate at different network layers and evaluation settings; direct F1 superiority claims are not methodologically valid."
+              </div>
+            </div>
+          </div>
+
+          <!-- Key Frozen Benchmark Metrics Cards -->
+          <div class="sub-panel">
+            <h4>Key Frozen Benchmark Metrics (Held-Out Test Set: 1,714 Queries)</h4>
+            <div class="benchmark-cards-grid">
+
+              <div class="benchmark-card card-system">
+                <div class="benchmark-header">Behavioral Baseline</div>
+                <div class="benchmark-stat text-success">Recall: 100.00%</div>
+                <div class="benchmark-sub">FPR: 1.75% (14 FP)</div>
+                <div class="benchmark-latency">P50: 0.24 µs | P99: 0.29 µs</div>
+                <div class="benchmark-note">Sub-microsecond heuristics</div>
+              </div>
+
+              <div class="benchmark-card card-system">
+                <div class="benchmark-header">ML30 (30 Causal Features)</div>
+                <div class="benchmark-stat text-success">Recall: 100.00%</div>
+                <div class="benchmark-sub text-success">FPR: 0.00% (0 FP)</div>
+                <div class="benchmark-latency">P50: 3,742 µs | P99: 4,963 µs</div>
+                <div class="benchmark-note">Python tree inference overhead</div>
+              </div>
+
+              <div class="benchmark-card card-system">
+                <div class="benchmark-header">ML31 (31 Features + Score)</div>
+                <div class="benchmark-stat text-success">Recall: 100.00%</div>
+                <div class="benchmark-sub">FPR: 0.13% (1 FP)</div>
+                <div class="benchmark-latency">P50: 3,857 µs | P99: 6,331 µs</div>
+                <div class="benchmark-note">Augmented feature vector</div>
+              </div>
+
+              <div class="benchmark-card card-system">
+                <div class="benchmark-header">Hybrid Fusion (&beta;=0.05)</div>
+                <div class="benchmark-stat text-success">Recall: 100.00%</div>
+                <div class="benchmark-sub text-success">FPR: 0.00% (0 FP)</div>
+                <div class="benchmark-latency">P50: 4,146 µs | P99: 6,928 µs</div>
+                <div class="benchmark-note">Executes live ML on all queries</div>
+              </div>
+
+              <div class="benchmark-card card-system card-highlight">
+                <div class="benchmark-header">Tiered Cascade (Recommended)</div>
+                <div class="benchmark-stat text-success">Recall: 100.00%</div>
+                <div class="benchmark-sub text-success">FPR: 0.00% (0 FP)</div>
+                <div class="benchmark-latency font-bold">Fast Path (62.5%): 0.21 µs</div>
+                <div class="benchmark-note">Bimodal: Overall median 0.32 µs</div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Publication Figures Gallery (5 Figures with Click-to-Zoom Modal) -->
+          <div class="sub-panel">
+            <div class="sub-panel-header">
+              <h4>Publication Figures Gallery (Click to Zoom Full Resolution)</h4>
+              <span class="badge badge-secondary">High-Resolution Vector/Cairo PNGs</span>
+            </div>
+
+            <div class="figures-gallery-grid">
+
+              <!-- Figure 1 -->
+              <div class="figure-card" data-img="/figures/01_cold_start_baseline_drift.png" data-caption="Figure 1: Cold-Start Host Baseline Entropy Drift. Comparing A1 Fresh Control, A2 Mature Control, and B Mitigated Treatment across 115 queries.">
+                <div class="figure-img-wrap">
+                  <img src="/figures/01_cold_start_baseline_drift.png" alt="Figure 1: Cold-Start Baseline Drift" loading="lazy" />
+                  <div class="figure-zoom-overlay"><span>🔍 Click to Zoom</span></div>
+                </div>
+                <div class="figure-info">
+                  <div class="figure-title">Figure 1: Cold-Start Baseline Drift</div>
+                  <div class="figure-caption">Unmitigated controls experience +4.54 bits drift; provisional gating enforces strictly 0.0000 bits drift.</div>
+                </div>
+              </div>
+
+              <!-- Figure 2A -->
+              <div class="figure-card" data-img="/figures/02_roc_curve.png" data-caption="Figure 2A: Held-Out Zero-Day ROC Curves across 1,714 records with validation-calibrated operating points.">
+                <div class="figure-img-wrap">
+                  <img src="/figures/02_roc_curve.png" alt="Figure 2A: ROC Curves" loading="lazy" />
+                  <div class="figure-zoom-overlay"><span>🔍 Click to Zoom</span></div>
+                </div>
+                <div class="figure-info">
+                  <div class="figure-title">Figure 2A: Zero-Day ROC Curves</div>
+                  <div class="figure-caption">AUC: Behavioral 0.9981, ML30 1.0000, ML31 1.0000, Hybrid 1.0000, Cascade 1.0000.</div>
+                </div>
+              </div>
+
+              <!-- Figure 2B -->
+              <div class="figure-card" data-img="/figures/03_precision_recall_curve.png" data-caption="Figure 2B: Zero-Day Precision-Recall Curves evaluating class imbalance with no-skill baseline.">
+                <div class="figure-img-wrap">
+                  <img src="/figures/03_precision_recall_curve.png" alt="Figure 2B: Precision-Recall Curves" loading="lazy" />
+                  <div class="figure-zoom-overlay"><span>🔍 Click to Zoom</span></div>
+                </div>
+                <div class="figure-info">
+                  <div class="figure-title">Figure 2B: Precision-Recall Curves</div>
+                  <div class="figure-caption">PR-AUC: Behavioral 0.9983, ML30 1.0000, ML31 1.0000, Hybrid 1.0000, Cascade 1.0000.</div>
+                </div>
+              </div>
+
+              <!-- Figure 3 -->
+              <div class="figure-card" data-img="/figures/04_cascade_latency.png" data-caption="Figure 3: Tiered Cascade Latency Architecture. Fast-Path (62.49%, P50=0.21 µs) vs Escalated ML-Path (37.51%, P50=3608 µs).">
+                <div class="figure-img-wrap">
+                  <img src="/figures/04_cascade_latency.png" alt="Figure 3: Cascade Latency Architecture" loading="lazy" />
+                  <div class="figure-zoom-overlay"><span>🔍 Click to Zoom</span></div>
+                </div>
+                <div class="figure-info">
+                  <div class="figure-title">Figure 3: Tiered Cascade Latency</div>
+                  <div class="figure-caption">Fast path satisfies sub-microsecond budget; overall cascade median latency is 0.32 µs.</div>
+                </div>
+              </div>
+
+              <!-- Figure 4 -->
+              <div class="figure-card" data-img="/figures/05_abdg_pareto_frontier.png" data-caption="Figure 4: ABDG Pareto Frontier. Scatter plot of Benign Recovery Rate vs Malicious Graduation Rate across 37 configurations.">
+                <div class="figure-img-wrap">
+                  <img src="/figures/05_abdg_pareto_frontier.png" alt="Figure 4: ABDG Pareto Frontier" loading="lazy" />
+                  <div class="figure-zoom-overlay"><span>🔍 Click to Zoom</span></div>
+                </div>
+                <div class="figure-info">
+                  <div class="figure-title">Figure 4: ABDG Pareto Frontier</div>
+                  <div class="figure-caption">Operational setting (Cbase=10, PGER=0.10) achieves 92.0% BRR and 0.0% MGR.</div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Publication Tables Section -->
+          <div class="sub-panel">
+            <h4>Publication Tables (Rendered from Frozen Markdown Artifacts)</h4>
+
+            <!-- Table 1: Cross-Layer Comparison -->
+            <div class="research-table-block">
+              <h5>Table 1: Cross-Layer Architectural &amp; Methodological Comparison (DNSentinel vs. TunnelEye)</h5>
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Dimension</th>
+                      <th>TunnelEye Baseline</th>
+                      <th>DNSentinel Behavioral Engine</th>
+                      <th>DNSentinel ML / Cascade Layer</th>
+                      <th>Methodological Boundary &amp; Caveat</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td><strong>Traffic Layer</strong></td><td>Transport / Flow Layer</td><td>Application Layer</td><td>Application Layer</td><td>TunnelEye: encrypted DoH flows; DNSentinel: plaintext DNS queries.</td></tr>
+                    <tr><td><strong>Traffic Visibility</strong></td><td>Encrypted TLS / DoH Flows</td><td>Plaintext DNS Query Payloads</td><td>Plaintext DNS + Causal State</td><td>TunnelEye requires no payload; DNSentinel requires resolver visibility.</td></tr>
+                    <tr><td><strong>Detection Granularity</strong></td><td>Flow Aggregate Summary</td><td>Individual Sequential DNS Packet</td><td>Individual Sequential DNS Packet</td><td>TunnelEye delayed until flow close; DNSentinel evaluates per packet.</td></tr>
+                    <tr><td><strong>Feature Representation</strong></td><td>20 Flow Statistics (IAT, burst)</td><td>5 Heuristic Distances</td><td>30–31 Causal Streaming Features</td><td>Feature domains are completely disjoint; no shared feature space.</td></tr>
+                    <tr><td><strong>Learning Paradigm</strong></td><td>Supervised LightGBM</td><td>Unsupervised Rolling Baselines</td><td>Supervised Random Forest (100 Trees)</td><td>TunnelEye requires labeled flows; Behavioral requires zero attack data.</td></tr>
+                    <tr><td><strong>Evaluation Setting</strong></td><td>10-Fold Stratified CV</td><td>Sequential Online Stream Replay</td><td>Held-Out Zero-Day Benchmark</td><td>TunnelEye shuffles flows; DNSentinel enforces chronological order.</td></tr>
+                    <tr><td><strong>Performance</strong></td><td>Macro F1 = <strong>0.9988</strong></td><td>Trace F1 = <strong>0.9076</strong></td><td>Recall = <strong>100.00%</strong>, FPR = <strong>0.00%</strong></td><td><strong>DO NOT DIRECTLY COMPARE F1:</strong> Tasks and layers differ fundamentally.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Table 2: Cold-Start Comparison -->
+            <div class="research-table-block">
+              <h5>Table 2: Controlled Three-Way Cold-Start Evaluation Results</h5>
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Evaluation Metric</th>
+                      <th>Pipeline A1 (Fresh Control)</th>
+                      <th>Pipeline A2 (Mature Control)</th>
+                      <th>Pipeline B (Mitigated Treatment)</th>
+                      <th>Treatment Lift (B vs. A2)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-coldstart-research">
+                    <tr><td><strong>Full Stream Recall</strong></td><td>31.30% (36 / 115)</td><td>32.17% (37 / 115)</td><td><strong>56.52% (65 / 115)</strong></td><td><strong class="text-success">+24.35% absolute</strong> (+75.7% relative)</td></tr>
+                    <tr><td><strong>Calibration Window Recall (k &le; 10)</strong></td><td>10.00% (1 / 10)</td><td>10.00% (1 / 10)</td><td><strong>80.00% (8 / 10)</strong></td><td><strong class="text-success">+70.00% absolute (8x lift)</strong></td></tr>
+                    <tr><td><strong>Earliest Detection Index</strong></td><td>Query #10</td><td>Query #10</td><td><strong>Query #2</strong></td><td><strong class="text-success">-8 queries earlier</strong></td></tr>
+                    <tr><td><strong>Cumulative Stream Contamination</strong></td><td>79 / 115 queries</td><td>78 / 115 queries</td><td><strong>0 / 115 queries</strong></td><td><strong class="text-success">-100% (Poisoning Immunity)</strong></td></tr>
+                    <tr><td><strong>Primary Host Drift</strong></td><td>+4.5265 bits</td><td>+4.5389 bits</td><td><strong>0.0000 bits</strong></td><td><strong class="text-success">Zero Drift Enforced</strong></td></tr>
+                    <tr><td><strong>Legitimate Calibration FPR</strong></td><td>10.00% (1 / 10)</td><td>10.00% (1 / 10)</td><td><strong>0.00% (0 / 10)</strong></td><td><strong class="text-success">Zero Early Jitter</strong></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Table 3: Zero-Day Campaign Recall -->
+            <div class="research-table-block">
+              <h5>Table 3: Zero-Day Campaign Detection Recall (Held-Out Final Test Set)</h5>
+              <div class="table-responsive">
+                <table class="data-table" id="table-zero-day-campaigns">
+                  <thead>
+                    <tr>
+                      <th>Held-Out Attack Campaign</th>
+                      <th>Threat Archetype</th>
+                      <th>Samples ($N$)</th>
+                      <th>Behavioral Recall</th>
+                      <th>ML30 Recall</th>
+                      <th>ML31 Recall</th>
+                      <th>Hybrid Recall</th>
+                      <th>Cascade Recall</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td><code>campaign_c2_stealth_gamma</code></td><td>Low-and-Slow C2 Beacons</td><td>166</td><td class="text-success">100.00%</td><td class="text-success">100.00%</td><td class="text-success">100.00%</td><td class="text-success">100.00%</td><td class="text-success font-bold">100.00%</td></tr>
+                    <tr><td><code>campaign_tunnel_base64_zeta</code></td><td>High-Entropy Base64 Tunnels</td><td>250</td><td class="text-success">100.00%</td><td class="text-success">100.00%</td><td class="text-success">100.00%</td><td class="text-success">100.00%</td><td class="text-success font-bold">100.00%</td></tr>
+                    <tr><td><code>campaign_tunnel_random_theta</code></td><td>High-Rate Burst Tunnels (10-25 QPS)</td><td>250</td><td class="text-success">100.00%</td><td class="text-success">100.00%</td><td class="text-success">100.00%</td><td class="text-success">100.00%</td><td class="text-success font-bold">100.00%</td></tr>
+                    <tr><td><code>campaign_exfil_chunk_iota</code></td><td>Structured Data Exfiltration</td><td>250</td><td class="text-success">100.00%</td><td class="text-success">100.00%</td><td class="text-success">100.00%</td><td class="text-success">100.00%</td><td class="text-success font-bold">100.00%</td></tr>
+                    <tr class="row-highlight"><td><strong>Aggregate Zero-Day Performance</strong></td><td><strong>All 4 Threat Campaigns</strong></td><td><strong>916</strong></td><td class="text-success font-bold">100.00%</td><td class="text-success font-bold">100.00%</td><td class="text-success font-bold">100.00%</td><td class="text-success font-bold">100.00%</td><td class="text-success font-bold">100.00%</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Table 4: Latency & Performance Profile -->
+            <div class="research-table-block">
+              <h5>Table 4: Empirical Latency &amp; Classification Performance Profile ($P99 \le 500\,\mu\text{s}$ Target)</h5>
+              <div class="table-responsive">
+                <table class="data-table" id="table-latency-profile">
+                  <thead>
+                    <tr>
+                      <th>Evaluated System / Pipeline Path</th>
+                      <th>Share</th>
+                      <th>Median ($P50$)</th>
+                      <th>Mean</th>
+                      <th>99th Percentile ($P99$)</th>
+                      <th>Target Met?</th>
+                      <th>Recall</th>
+                      <th>FPR</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td><strong>Behavioral Baseline</strong></td><td>100.0%</td><td><strong>0.24 µs</strong></td><td>0.25 µs</td><td><strong>0.29 µs</strong></td><td><span class="badge badge-normal">YES</span></td><td>100.0%</td><td>1.75%</td></tr>
+                    <tr><td><strong>Cascade: Fast-Path Exit</strong></td><td><strong>62.5%</strong></td><td><strong>0.21 µs</strong></td><td>0.40 µs</td><td><strong>1.38 µs</strong></td><td><span class="badge badge-normal">YES</span></td><td>100.0%</td><td>0.00%</td></tr>
+                    <tr><td><strong>Cascade: Escalated Path</strong></td><td>37.5%</td><td>3,608.03 µs</td><td>3,669.80 µs</td><td>5,169.26 µs</td><td><span class="badge badge-secondary">NO</span></td><td>100.0%</td><td>0.00%</td></tr>
+                    <tr class="row-highlight"><td><strong>Cascade: Overall End-to-End</strong></td><td>100.0%</td><td><strong>0.32 µs</strong></td><td>1,794.70 µs</td><td>11,327.07 µs</td><td><span class="badge badge-secondary">Bimodal</span></td><td><strong>100.0%</strong></td><td><strong>0.00%</strong></td></tr>
+                    <tr><td><strong>ML30 Standalone</strong></td><td>100.0%</td><td>3,742.28 µs</td><td>3,748.45 µs</td><td>4,963.04 µs</td><td><span class="badge badge-secondary">NO</span></td><td>100.0%</td><td>0.00%</td></tr>
+                    <tr><td><strong>ML31 Standalone</strong></td><td>100.0%</td><td>3,856.70 µs</td><td>3,917.74 µs</td><td>6,331.24 µs</td><td><span class="badge badge-secondary">NO</span></td><td>100.0%</td><td>0.13%</td></tr>
+                    <tr><td><strong>Hybrid Fusion</strong></td><td>100.0%</td><td>4,145.93 µs</td><td>4,279.14 µs</td><td>6,928.20 µs</td><td><span class="badge badge-secondary">NO</span></td><td>100.0%</td><td>0.00%</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Historical TunnelEye 4 Splits & Ablation Study -->
+          <div class="sub-panel">
+            <div class="sub-panel-header">
+              <h4>Historical TunnelEye Reproduction Metrics (10-Fold Stratified CV)</h4>
+              <span class="badge badge-secondary">CIRA-CIC-DoHBrw-2020 &amp; DoH-Extended</span>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Dataset Split</th>
+                    <th>Evaluated Dataset</th>
+                    <th>Traffic Direction</th>
+                    <th>Accuracy</th>
+                    <th>Weighted Precision</th>
+                    <th>Weighted Recall</th>
+                    <th>Weighted F1</th>
+                    <th>Inference Latency</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-tunneleye-research">
+                  <!-- Dynamically populated with exact 10-decimal values -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Four-Tier Feature Sensitivity Analysis -->
+          <div class="sub-panel">
+            <div class="sub-panel-header">
+              <h4>Four-Tier Feature Sensitivity Analysis (Ablation Study)</h4>
+              <span class="badge badge-secondary">synthetic_mixed_stream.jsonl</span>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Tier Identifier</th>
+                    <th>Configuration Name</th>
+                    <th>Active Normalized Weights</th>
+                    <th>Accuracy</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1-Score</th>
+                    <th>FPR</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-ablation-research">
+                  <!-- Populated from ablation_study.csv -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- SECTION 7: SYSTEM STATUS                                  -->
+      <!-- ========================================================= -->
+      <section id="tab-system" class="tab-content" role="tabpanel">
+        <div class="panel">
+          <div class="panel-header">
+            <h3>System Status &amp; Telemetry Diagnostics</h3>
+            <span class="badge badge-normal">Health Monitor</span>
+          </div>
+
+          <div class="system-grid">
+            <div class="sys-item">
+              <div class="sys-label">BIND9 Local Resolver Daemon</div>
+              <div class="sys-value" id="sys-bind-val">Checking...</div>
+              <div class="sys-detail">systemctl is-active named</div>
+            </div>
+
+            <div class="sys-item">
+              <div class="sys-label">Network Capture Interface</div>
+              <div class="sys-value" id="sys-iface-val">ens33 (Ready)</div>
+              <div class="sys-detail">Port 53 UDP/TCP sniff filter</div>
+            </div>
+
+            <div class="sys-item">
+              <div class="sys-label">Active Host Profiles</div>
+              <div class="sys-value" id="sys-hosts-val">0</div>
+              <div class="sys-detail">data/profiles/ directory entries</div>
+            </div>
+
+            <div class="sys-item">
+              <div class="sys-label">Enterprise Organization Profile</div>
+              <div class="sys-value" id="sys-org-val">Initialized</div>
+              <div class="sys-detail">data/organization/organization.json</div>
+            </div>
+
+            <div class="sys-item">
+              <div class="sys-label">In-Memory Telemetry Buffer</div>
+              <div class="sys-value" id="sys-buf-val">0 / 300</div>
+              <div class="sys-detail">Ring buffer capacity</div>
+            </div>
+
+            <div class="sys-item">
+              <div class="sys-label">ML Models Availability</div>
+              <div class="sys-value" id="sys-models-val">Available (ML30, ML31, Calibration)</div>
+              <div class="sys-detail">experiments/results/ml_models/</div>
+            </div>
+          </div>
+
+          <!-- Dataset & Model Cryptographic Integrity Hashes Card -->
+          <div class="sub-panel mt-4">
+            <h4>Cryptographic Dataset &amp; Model Integrity Hashes (Phase 7B Verified Manifest)</h4>
+            <p class="panel-desc">All evaluated benchmark datasets and serialized machine learning models remain 100% bitwise immutable:</p>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Component</th>
+                    <th>File Path</th>
+                    <th>Verified SHA-256 Checksum</th>
+                    <th>Integrity Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>Raw ML Benchmark Dataset</strong></td>
+                    <td class="font-mono">experiments/datasets/dnsentinel_ml_benchmark.jsonl</td>
+                    <td class="font-mono" style="font-size: 0.78rem;">cbb1147ab3a241c3222c6f11529465c2e4725ec6a00aea5dc4c8df4c8286e32a</td>
+                    <td><span class="badge badge-normal">Verified Immutable</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Leakage-Free Feature Dataset</strong></td>
+                    <td class="font-mono">experiments/datasets/dnsentinel_ml_features.jsonl</td>
+                    <td class="font-mono" style="font-size: 0.78rem;">7de0bb5a5a6b5eb7dbf335e2fcc04ab9de5db802227457c6228e7b259952e394</td>
+                    <td><span class="badge badge-normal">Verified Immutable</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>ML30 Random Forest Model</strong></td>
+                    <td class="font-mono">experiments/results/ml_models/ml30_random_forest.joblib</td>
+                    <td class="font-mono" style="font-size: 0.78rem;">0cb956069f463ef66f5de3b7f249417d67df879c91d0936eaff720628935c6e2</td>
+                    <td><span class="badge badge-normal">Verified Frozen</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>ML31 Random Forest Model</strong></td>
+                    <td class="font-mono">experiments/results/ml_models/ml31_random_forest.joblib</td>
+                    <td class="font-mono" style="font-size: 0.78rem;">208146aa46630ee026a0b8ef301aacd5a5758f3904bd151b988e8e1a41398257</td>
+                    <td><span class="badge badge-normal">Verified Frozen</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Calibration Config</strong></td>
+                    <td class="font-mono">experiments/results/ml_models/calibration_config.json</td>
+                    <td class="font-mono" style="font-size: 0.78rem;">69f7cbbcc66de3d3a4582ecb7a4fee7c82599216eb72244a54719e13bc034737</td>
+                    <td><span class="badge badge-normal">Verified Frozen</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div class="footer-left">
+        <span>DNSentinel Adaptive Behavioral Anomaly Detection &amp; Tiered Cascade</span>
+        <span class="sep">&bull;</span>
+        <span>Version 0.2-phase8</span>
+      </div>
+      <div class="footer-right">
+        <span>Academic Demonstration &amp; SOC Telemetry &bull; Frozen Checkpoint: 6cbeb35</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Clickable Full-Resolution Figure Zoom Modal Overlay -->
+  <div id="image-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <button id="modal-close" class="modal-close" title="Close image">&times;</button>
+      <img id="modal-image" src="" alt="Research Figure Full Zoom" />
+      <div id="modal-caption" class="modal-caption"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+{
+    "total_hosts": [
+        "10.0.0.1",
+        "10.0.0.2"
+    ],
+    "total_queries": 98,
+    "entropy_sum": 289.8216,
+    "domain_length_sum": 1006,
+    "average_entropy": 2.9574,
+    "average_domain_length": 10.2653,
+    "domain_frequency": {
+        "google.com": 38,
+        "github.com": 28,
+        "youtube.com": 18,
+        "ubuntu.com": 12,
+        "www.amrita.edu": 2
+    },
+    "query_type_frequency": {
+        "1": 98
+    },
+    "host_domain_map": {
+        "google.com": [
+            "192.168.145.128",
+            "192.168.145.1",
+            "192.168.6.130",
+            "192.168.145.130"
+        ],
+        "github.com": [
+            "192.168.145.128",
+            "192.168.145.1",
+            "192.168.145.130"
+        ],
+        "youtube.com": [
+            "192.168.145.128",
+            "192.168.145.1",
+            "192.168.145.130"
+        ],
+        "ubuntu.com": [
+            "192.168.145.128",
+            "192.168.145.1",
+            "192.168.145.130"
+        ],
+        "www.amrita.edu": [
+            "192.168.145.128"
+        ]
+    }
+}

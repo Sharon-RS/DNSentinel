@@ -24,14 +24,16 @@ class DetectionPipeline:
     poisoning the behavioral baseline.
     """
 
-    def __init__(self):
+    def __init__(self, data_dir=None):
+
+        self.data_dir = data_dir
 
         self.host_profile = (
-            HostProfileManager()
+            HostProfileManager(data_dir=data_dir)
         )
 
         self.organization_profile = (
-            OrganizationProfile()
+            OrganizationProfile(data_dir=data_dir)
         )
 
         self.window = (

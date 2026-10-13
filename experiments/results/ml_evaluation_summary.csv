@@ -1,0 +1,11 @@
+partition,configuration,total_samples,tp,fp,tn,fn,accuracy,precision,recall,f1_score,fpr,fnr,roc_auc,pr_auc,zero_day_recall,operating_threshold,latency_p50_us,latency_p99_us
+Validation,Behavioral-Only,1276,476,25,775,0,0.9804,0.9501,1.0,0.9744,0.0312,0.0,0.9956,0.9923,0.0,62.0,0.0,0.0
+Validation,ML30 (30 Features),1276,476,0,800,0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,1.0,0.0,0.185,0.0,0.0
+Validation,ML31 (31 Features),1276,476,0,800,0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,1.0,0.0,0.15,0.0,0.0
+Validation,Hybrid (Behavioral + ML30),1276,476,0,800,0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,1.0,0.0,20.5,0.0,0.0
+Validation,Tiered Cascade (Fast-Path + ML30),1276,476,0,800,0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,1.0,0.0,0.2,0.0,0.0
+Final Test,Behavioral-Only Baseline,1714,916,14,784,0,0.9918,0.9849,1.0,0.9924,0.0175,0.0,0.9981,0.9983,1.0,62.0,0.24,0.29
+Final Test,ML30 (30 Raw Features),1714,916,0,798,0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,1.0,1.0,0.185,3742.28,4963.04
+Final Test,ML31 (31 Features incl. Behavior),1714,916,1,797,0,0.9994,0.9989,1.0,0.9994,0.0013,0.0,1.0,1.0,1.0,0.15,3856.7,6331.24
+Final Test,Hybrid (Behavioral + ML30),1714,916,0,798,0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,1.0,1.0,20.5,4145.93,6928.2
+Final Test,Tiered Cascade (Fast-Path + ML30),1714,916,0,798,0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,1.0,1.0,0.2,0.32,11327.07

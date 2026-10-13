@@ -1,103 +1,105 @@
 from src.pipeline.detection_pipeline import DetectionPipeline
+from experiments.context import IsolatedEvaluationContext
+
+with IsolatedEvaluationContext() as ctx:
+
+    pipeline = ctx.create_pipeline()
 
 
-pipeline = DetectionPipeline()
+    # --------------------------------------------------
+    # Establish normal baseline
+    # --------------------------------------------------
+
+    normal_samples = [
+
+        ("10.0.0.1", "google.com", 2.6, 10),
+
+        ("10.0.0.1", "github.com", 3.0, 10),
+
+        ("10.0.0.1", "youtube.com", 3.2, 11),
+
+        ("10.0.0.1", "stackoverflow.com", 3.4, 17),
+
+    ]
 
 
-# --------------------------------------------------
-# Establish normal baseline
-# --------------------------------------------------
+    for host, domain, entropy, length in normal_samples:
 
-normal_samples = [
+        features = {
 
-    ("10.0.0.1", "google.com", 2.6, 10),
+            "entropy": entropy,
 
-    ("10.0.0.1", "github.com", 3.0, 10),
+            "domain_length": length,
 
-    ("10.0.0.1", "youtube.com", 3.2, 11),
+            "query_type": 1
 
-    ("10.0.0.1", "stackoverflow.com", 3.4, 17),
+        }
 
-]
+        pipeline.process(
+            host,
+            domain,
+            features
+        )
 
 
-for host, domain, entropy, length in normal_samples:
+    print("\nNormal baseline established.")
 
-    features = {
 
-        "entropy": entropy,
+    # --------------------------------------------------
+    # Suspicious domain
+    # --------------------------------------------------
 
-        "domain_length": length,
+    malicious_domain = "asd82js92j.command.xyz"
+
+
+    malicious_features = {
+
+        "entropy": 5.1,
+
+        "domain_length": 28,
 
         "query_type": 1
 
     }
 
-    pipeline.process(
-        host,
-        domain,
-        features
-    )
 
+    # --------------------------------------------------
+    # Send suspicious domain repeatedly
+    # --------------------------------------------------
 
-print("\nNormal baseline established.")
+    for i in range(1, 6):
 
+        result = pipeline.process(
 
-# --------------------------------------------------
-# Suspicious domain
-# --------------------------------------------------
+            "10.0.0.1",
 
-malicious_domain = "asd82js92j.command.xyz"
+            malicious_domain,
 
+            malicious_features
 
-malicious_features = {
+        )
 
-    "entropy": 5.1,
+        print("\n--------------------------------")
 
-    "domain_length": 28,
+        print(
+            f"Suspicious Query #{i}"
+        )
 
-    "query_type": 1
+        print(
+            f"Domain           : {malicious_domain}"
+        )
 
-}
+        print(
+            f"Score            : "
+            f"{result['behavior_score']}"
+        )
 
+        print(
+            f"Risk             : "
+            f"{result['risk_level']}"
+        )
 
-# --------------------------------------------------
-# Send suspicious domain repeatedly
-# --------------------------------------------------
-
-for i in range(1, 6):
-
-    result = pipeline.process(
-
-        "10.0.0.1",
-
-        malicious_domain,
-
-        malicious_features
-
-    )
-
-    print("\n--------------------------------")
-
-    print(
-        f"Suspicious Query #{i}"
-    )
-
-    print(
-        f"Domain           : {malicious_domain}"
-    )
-
-    print(
-        f"Score            : "
-        f"{result['behavior_score']}"
-    )
-
-    print(
-        f"Risk             : "
-        f"{result['risk_level']}"
-    )
-
-    print(
-        f"Baseline Updated : "
-        f"{result['baseline_updated']}"
-    )
+        print(
+            f"Baseline Updated : "
+            f"{result['baseline_updated']}"
+        )
